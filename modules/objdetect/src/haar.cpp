@@ -49,6 +49,7 @@
 #if CV_HAAR_FEATURE_MAX_LOCAL != CV_HAAR_FEATURE_MAX
     #error CV_HAAR_FEATURE_MAX definition changed. Adjust CV_HAAR_FEATURE_MAX_LOCAL value please.
 #endif
+#include "opencv2/core/hal/intrin.hpp"
 
 #if CV_SSE2
 #   if 1 /*!CV_SSE4_1 && !CV_SSE4_2*/
@@ -585,8 +586,8 @@ cvRunHaarClassifierCascadeSum( const CvHaarClassifierCascade* _cascade,
 #if CV_HAAR_USE_AVX
     bool haveAVX = CV_CPU_HAS_SUPPORT_AVX;
 #else
-#  ifdef CV_HAAR_USE_SSE
-    bool haveSSE2 = cv::checkHardwareSupport(CV_CPU_SSE2);
+#  if CV_SIMD128_64F
+    bool useSIMD = cv::checkHardwareSupport(CV_CPU_SSE2) || cv::checkHardwareSupport(CV_CPU_NEON);
 #  endif
 #endif
 
@@ -714,12 +715,12 @@ cvRunHaarClassifierCascadeSum( const CvHaarClassifierCascade* _cascade,
             }
         }
         else
-#elif defined CV_HAAR_USE_SSE //old SSE optimization
-        if(haveSSE2)
+#elif CV_SIMD128_64F //old SSE optimization
+        if(useSIMD)
         {
             for( i = start_stage; i < cascade->count; i++ )
             {
-                __m128d vstage_sum = _mm_setzero_pd();
+                v_float64x2 vstage_sum = v_setzero_f64();
                 if( cascade->stage_classifier[i].two_rects )
                 {
                     for( j = 0; j < cascade->stage_classifier[i].count; j++ )
@@ -728,10 +729,10 @@ cvRunHaarClassifierCascadeSum( const CvHaarClassifierCascade* _cascade,
                         CvHidHaarTreeNode* node = classifier->node;
 
                         // ayasin - NHM perf optim. Avoid use of costly flaky jcc
-                        __m128d t = _mm_set_sd(node->threshold*variance_norm_factor);
-                        __m128d a = _mm_set_sd(classifier->alpha[0]);
-                        __m128d b = _mm_set_sd(classifier->alpha[1]);
-                        __m128d sum = _mm_set_sd(calc_sum(node->feature.rect[0],p_offset) * node->feature.rect[0].weight +
+                        v_float64x2 t = v_setall_f64(node->threshold*variance_norm_factor);
+                        v_float64x2 a = v_setall_f64(classifier->alpha[0]);
+                        v_float64x2 b = v_setall_f64(classifier->alpha[1]);
+                        v_float64x2 sum = v_setall_f64(calc_sum(node->feature.rect[0],p_offset) * node->feature.rect[0].weight +
                                                  calc_sum(node->feature.rect[1],p_offset) * node->feature.rect[1].weight);
                         t = _mm_cmpgt_sd(t, sum);
                         vstage_sum = _mm_add_sd(vstage_sum, _mm_blendv_pd(b, a, t));
