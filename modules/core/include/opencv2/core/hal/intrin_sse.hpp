@@ -2034,6 +2034,20 @@ inline void v_load_deinterleave(const uint64 *ptr, v_uint64x2& a, v_uint64x2& b,
     c = v_uint64x2(_mm_unpackhi_epi64(t1, t2));
 }
 
+inline void v_load_deinterleave(const short* ptr, v_int16x8& a, v_int16x8& b)
+{
+    __m128i t0 = _mm_loadu_si128((const __m128i*)(ptr));     // a0 b0 a1 b1 a2 b2 a3 b3
+    __m128i t1 = _mm_loadu_si128((const __m128i*)(ptr + 8)); // a4 b4 a5 b5 a6 b6 a7 b7
+    t0 = _mm_shufflelo_epi16(t0, _MM_SHUFFLE(3, 1, 2, 0));   // a0 a1 b0 b1 a2 b2 a3 b3
+    t0 = _mm_shufflehi_epi16(t0, _MM_SHUFFLE(3, 1, 2, 0));   // a0 a1 b0 b1 a2 a3 b2 b3
+    t1 = _mm_shufflelo_epi16(t1, _MM_SHUFFLE(3, 1, 2, 0));   // a4 a5 b4 b5 a6 b6 a7 b7
+    t1 = _mm_shufflehi_epi16(t1, _MM_SHUFFLE(3, 1, 2, 0));   // a4 a5 b4 b5 a6 a7 b6 b7
+    t0 = _mm_shuffle_epi32(t0, _MM_SHUFFLE(3, 1, 2, 0));     // a0 a1 a2 a3 b0 b1 b2 b3
+    t1 = _mm_shuffle_epi32(t1, _MM_SHUFFLE(3, 1, 2, 0));     // a4 a5 a6 a7 b4 b5 b6 b7
+    a.val = _mm_unpacklo_epi64(t0, t1);                      // a0 a1 a2 a3 a4 a5 a6 a7
+    b.val = _mm_unpackhi_epi64(t0, t1);                      // b0 b1 b2 b3 b4 b5 b6 b7
+}
+
 inline void v_load_deinterleave(const uint64 *ptr, v_uint64x2& a,
                                 v_uint64x2& b, v_uint64x2& c, v_uint64x2& d)
 {
