@@ -1447,7 +1447,65 @@ template<> struct RGB2Gray<uchar>
     int tab[256*3];
 };
 
-#if CV_NEON
+#if CV_SIMD128
+template <>
+struct RGB2Gray<ushort>
+{
+    typedef ushort channel_type;
+
+    RGB2Gray(int _srccn, int blueIdx, const int* _coeffs) :
+        srccn(_srccn)
+    {
+        static const int coeffs0[] = { R2Y, G2Y, B2Y };
+        memcpy(coeffs, _coeffs ? _coeffs : coeffs0, 3*sizeof(coeffs[0]));
+        if( blueIdx == 0 )
+            std::swap(coeffs[0], coeffs[2]);
+
+        v_cb = v_setall_u16(coeffs[0]);
+        v_cg = v_setall_u16(coeffs[1]);
+        v_cr = v_setall_u16(coeffs[2]);
+        v_delta = v_setall_u32(1 << (yuv_shift - 1));
+    }
+
+    void operator()(const ushort* src, ushort* dst, int n) const
+    {
+        int scn = srccn, cb = coeffs[0], cg = coeffs[1], cr = coeffs[2], i = 0;
+
+        for ( ; i <= n - 8; i += 8, src += scn * 8)
+        {
+            v_uint16x8 v_b, v_r, v_g;
+            if (scn == 3)
+            {
+                v_load_deinterleave(src, v_b, v_g, v_r);
+            }
+            else
+            {
+                v_uint16x8 dummy;
+                v_load_deinterleave(src, v_b, v_g, v_r, dummy);
+            }
+
+            v_uint32x4 v_hib, v_lob, v_hig, v_log, v_hir, v_lor;
+            v_mul_expand(v_b, v_cb, v_hib, v_lob);
+            v_mul_expand(v_g, v_cg, v_hig, v_log);
+            v_mul_expand(v_r, v_cr, v_hir, v_lor);
+
+            v_uint32x4 v_dst0 = ((v_hib + v_hig + v_hir + v_delta) >> yuv_shift);
+            v_uint32x4 v_dst1 = ((v_lob + v_log + v_lor + v_delta) >> yuv_shift);
+
+            v_pack_store(dst + i, v_dst0);
+            v_pack_store(dst + i + 4, v_dst1);
+        }
+
+        for( ; i < n; i++, src += scn)
+            dst[i] = (ushort)CV_DESCALE((unsigned)(src[0]*cb + src[1]*cg + src[2]*cr), yuv_shift);
+    }
+
+    int srccn, coeffs[3];
+    v_uint16x8 v_cb, v_cg, v_cr;
+    v_uint32x4 v_delta;
+};
+
+#elif CV_NEON
 
 template <>
 struct RGB2Gray<ushort>
