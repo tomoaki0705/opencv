@@ -1173,9 +1173,6 @@ enum
     BLOCK_SIZE = 256
 };
 
-//#undef CV_SIMD128
-//#define CV_SIMD128 0
-
 struct RGB5x52Gray
 {
     typedef uchar channel_type;
@@ -1190,22 +1187,6 @@ struct RGB5x52Gray
         v_f8 = v_setall_u16(0xf8);
         v_fc = v_setall_u16(0xfc);
         haveSIMD = hasSIMD128();
-        #elif CV_NEON
-        v_b2y = vdup_n_u16(B2Y);
-        v_g2y = vdup_n_u16(G2Y);
-        v_r2y = vdup_n_u16(R2Y);
-        v_delta = vdupq_n_u32(1 << (yuv_shift - 1));
-        v_f8 = vdupq_n_u16(0xf8);
-        v_fc = vdupq_n_u16(0xfc);
-        #elif CV_SSE2
-        haveSIMD = hasSIMD128();
-        const __m128i v_b2y = _mm_set1_epi16(B2Y);
-        const __m128i v_g2y = _mm_set1_epi16(G2Y);
-        v_bg2y = _mm_unpacklo_epi16(v_b2y, v_g2y);
-        const __m128i v_r2y = _mm_set1_epi16(R2Y);
-        const __m128i v_one = _mm_set1_epi16(1);
-        v_rd2y = _mm_unpacklo_epi16(v_r2y, v_one);
-        v_delta = _mm_slli_epi16(v_one, yuv_shift - 1);
         #endif
     }
 
@@ -1234,52 +1215,6 @@ struct RGB5x52Gray
                     v_dst1 = (v_dst1 + v_delta) >> yuv_shift;
                     v_pack(v_dst0, v_dst1);
                     v_store_low(dst + i, v_pack(v_pack(v_dst0, v_dst1),v_setzero_u16()));
-                }
-            }
-            #elif CV_NEON
-            for ( ; i <= n - 8; i += 8)
-            {
-                uint16x8_t v_src = vld1q_u16((ushort *)src + i);
-                uint16x8_t v_t0 = vandq_u16(vshlq_n_u16(v_src, 3), v_f8),
-                           v_t1 = vandq_u16(vshrq_n_u16(v_src, 3), v_fc),
-                           v_t2 = vandq_u16(vshrq_n_u16(v_src, 8), v_f8);
-
-                uint32x4_t v_dst0 = vmlal_u16(vmlal_u16(vmull_u16(vget_low_u16(v_t0), v_b2y),
-                                              vget_low_u16(v_t1), v_g2y), vget_low_u16(v_t2), v_r2y);
-                uint32x4_t v_dst1 = vmlal_u16(vmlal_u16(vmull_u16(vget_high_u16(v_t0), v_b2y),
-                                              vget_high_u16(v_t1), v_g2y), vget_high_u16(v_t2), v_r2y);
-                v_dst0 = vshrq_n_u32(vaddq_u32(v_dst0, v_delta), yuv_shift);
-                v_dst1 = vshrq_n_u32(vaddq_u32(v_dst1, v_delta), yuv_shift);
-
-                vst1_u8(dst + i, vmovn_u16(vcombine_u16(vmovn_u32(v_dst0), vmovn_u32(v_dst1))));
-            }
-            #elif CV_SSE2
-            if (haveSIMD)
-            {
-                for ( ; i <= n - 8; i += 8)
-                {
-                    __m128i v_src = _mm_loadu_si128((__m128i const *)((ushort *)src + i));
-                    __m128i v_b = _mm_srli_epi16(_mm_slli_epi16(v_src, 11), 8),
-                            v_g = _mm_srli_epi16(_mm_slli_epi16(_mm_srli_epi16(v_src, 5), 10),8),
-                            v_r = _mm_slli_epi16(_mm_srli_epi16(v_src, 11), 3);
-
-                    __m128i v_bg_lo = _mm_unpacklo_epi16(v_b, v_g);
-                    __m128i v_rd_lo = _mm_unpacklo_epi16(v_r, v_delta);
-                    __m128i v_bg_hi = _mm_unpackhi_epi16(v_b, v_g);
-                    __m128i v_rd_hi = _mm_unpackhi_epi16(v_r, v_delta);
-                    v_bg_lo = _mm_madd_epi16(v_bg_lo, v_bg2y);
-                    v_rd_lo = _mm_madd_epi16(v_rd_lo, v_rd2y);
-                    v_bg_hi = _mm_madd_epi16(v_bg_hi, v_bg2y);
-                    v_rd_hi = _mm_madd_epi16(v_rd_hi, v_rd2y);
-
-                    __m128i v_bgr_lo = _mm_add_epi32(v_bg_lo, v_rd_lo);
-                    __m128i v_bgr_hi = _mm_add_epi32(v_bg_hi, v_rd_hi);
-                    v_bgr_lo = _mm_srli_epi32(v_bgr_lo, yuv_shift);
-                    v_bgr_hi = _mm_srli_epi32(v_bgr_hi, yuv_shift);
-
-                    __m128i v_dst = _mm_packs_epi32(v_bgr_lo, v_bgr_hi);
-                    v_dst = _mm_packus_epi16(v_dst, v_dst);
-                    _mm_storel_epi64((__m128i *)(dst + i), v_dst);
                 }
             }
             #endif
@@ -1316,52 +1251,6 @@ struct RGB5x52Gray
                     v_store_low(dst + i, v_pack(v_pack(v_dst0, v_dst1),v_setzero_u16()));
                 }
             }
-            #elif CV_NEON
-            for ( ; i <= n - 8; i += 8)
-            {
-                uint16x8_t v_src = vld1q_u16((ushort *)src + i);
-                uint16x8_t v_t0 = vandq_u16(vshlq_n_u16(v_src, 3), v_f8),
-                           v_t1 = vandq_u16(vshrq_n_u16(v_src, 2), v_f8),
-                           v_t2 = vandq_u16(vshrq_n_u16(v_src, 7), v_f8);
-
-                uint32x4_t v_dst0 = vmlal_u16(vmlal_u16(vmull_u16(vget_low_u16(v_t0), v_b2y),
-                                              vget_low_u16(v_t1), v_g2y), vget_low_u16(v_t2), v_r2y);
-                uint32x4_t v_dst1 = vmlal_u16(vmlal_u16(vmull_u16(vget_high_u16(v_t0), v_b2y),
-                                              vget_high_u16(v_t1), v_g2y), vget_high_u16(v_t2), v_r2y);
-                v_dst0 = vshrq_n_u32(vaddq_u32(v_dst0, v_delta), yuv_shift);
-                v_dst1 = vshrq_n_u32(vaddq_u32(v_dst1, v_delta), yuv_shift);
-
-                vst1_u8(dst + i, vmovn_u16(vcombine_u16(vmovn_u32(v_dst0), vmovn_u32(v_dst1))));
-            }
-            #elif CV_SSE2
-            if (haveSIMD)
-            {
-                for ( ; i <= n - 8; i += 8)
-                {
-                    __m128i v_src = _mm_loadu_si128((__m128i const *)((ushort *)src + i));
-                    __m128i v_b = _mm_srli_epi16(_mm_slli_epi16(v_src, 11), 8),
-                            v_g = _mm_srli_epi16(_mm_slli_epi16(_mm_srli_epi16(v_src, 5), 11),8),
-                            v_r = _mm_srli_epi16(_mm_slli_epi16(_mm_srli_epi16(v_src, 10), 11),8);
-
-                    __m128i v_bg_lo = _mm_unpacklo_epi16(v_b, v_g);
-                    __m128i v_rd_lo = _mm_unpacklo_epi16(v_r, v_delta);
-                    __m128i v_bg_hi = _mm_unpackhi_epi16(v_b, v_g);
-                    __m128i v_rd_hi = _mm_unpackhi_epi16(v_r, v_delta);
-                    v_bg_lo = _mm_madd_epi16(v_bg_lo, v_bg2y);
-                    v_rd_lo = _mm_madd_epi16(v_rd_lo, v_rd2y);
-                    v_bg_hi = _mm_madd_epi16(v_bg_hi, v_bg2y);
-                    v_rd_hi = _mm_madd_epi16(v_rd_hi, v_rd2y);
-
-                    __m128i v_bgr_lo = _mm_add_epi32(v_bg_lo, v_rd_lo);
-                    __m128i v_bgr_hi = _mm_add_epi32(v_bg_hi, v_rd_hi);
-                    v_bgr_lo = _mm_srli_epi32(v_bgr_lo, yuv_shift);
-                    v_bgr_hi = _mm_srli_epi32(v_bgr_hi, yuv_shift);
-
-                    __m128i v_dst = _mm_packs_epi32(v_bgr_lo, v_bgr_hi);
-                    v_dst = _mm_packus_epi16(v_dst, v_dst);
-                    _mm_storel_epi64((__m128i *)(dst + i), v_dst);
-                }
-            }
             #endif
             for ( ; i < n; i++)
             {
@@ -1382,14 +1271,6 @@ struct RGB5x52Gray
     v_uint32x4 v_delta;
     v_uint16x8 v_f8;
     v_uint16x8 v_fc;
-    #elif CV_NEON
-    uint16x4_t v_b2y, v_g2y, v_r2y;
-    uint32x4_t v_delta;
-    uint16x8_t v_f8, v_fc;
-    #elif CV_SSE2
-    bool haveSIMD;
-    __m128i v_bg2y, v_rd2y;
-    __m128i v_delta;
     #endif
 };
 
@@ -1746,7 +1627,7 @@ struct RGB2Gray<float>
         v_cg = _mm_set1_ps(coeffs[1]);
         v_cr = _mm_set1_ps(coeffs[2]);
 
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
     }
 
     void process(__m128 v_b, __m128 v_g, __m128 v_r,
@@ -1978,7 +1859,7 @@ struct RGB2YCrCb_f<float>
         v_c4 = _mm_set1_ps(coeffs[4]);
         v_delta = _mm_set1_ps(ColorChannel<float>::half());
 
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
     }
 
     void process(__m128 v_r, __m128 v_g, __m128 v_b,
@@ -2759,7 +2640,7 @@ struct YCrCb2RGB_f<float>
         v_delta = _mm_set1_ps(ColorChannel<float>::half());
         v_alpha = _mm_set1_ps(ColorChannel<float>::max());
 
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
     }
 
     void process(__m128 v_y, __m128 v_cr, __m128 v_cb,
@@ -3180,7 +3061,7 @@ struct YCrCb2RGB_i<uchar>
         // when using YUV, one of coefficients is bigger than std::numeric_limits<short>::max(),
         //which is not appropriate for SSE
         useSSE = isCrCb;
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
     }
 
 #if CV_SSE4_1
@@ -3658,7 +3539,7 @@ struct RGB2XYZ_f<float>
         v_c7 = _mm_set1_ps(coeffs[7]);
         v_c8 = _mm_set1_ps(coeffs[8]);
 
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
     }
 
     void process(__m128 v_r, __m128 v_g, __m128 v_b,
@@ -4099,7 +3980,7 @@ struct XYZ2RGB_f<float>
 
         v_alpha = _mm_set1_ps(ColorChannel<float>::max());
 
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
     }
 
     void process(__m128 v_x, __m128 v_y, __m128 v_z,
@@ -4859,7 +4740,7 @@ struct HSV2RGB_b
         v_scale = _mm_set1_ps(255.0f);
         v_alpha = _mm_set1_ps(ColorChannel<uchar>::max());
         v_zero = _mm_setzero_si128();
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
@@ -5240,7 +5121,7 @@ struct RGB2HLS_b
         #elif CV_SSE2
         v_scale_inv = _mm_set1_ps(1.f/255.f);
         v_zero = _mm_setzero_si128();
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
@@ -5649,7 +5530,7 @@ struct HLS2RGB_b
         v_scale = _mm_set1_ps(255.f);
         v_alpha = _mm_set1_ps(ColorChannel<uchar>::max());
         v_zero = _mm_setzero_si128();
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
@@ -6684,7 +6565,7 @@ struct Lab2RGBfloat
         fThresh = softfloat(6)/softfloat(29); // 7.787f * 0.008856f + 16.0f / 116.0f = 6/29
 
         #if CV_SSE2
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
@@ -7317,7 +7198,7 @@ struct Lab2RGB_b
         v_scale = _mm_set1_ps(255.f);
         v_alpha = _mm_set1_ps(ColorChannel<uchar>::max());
         v_zero = _mm_setzero_si128();
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
@@ -7577,7 +7458,7 @@ struct RGB2Luvfloat
         vn = d*softfloat(13*9)*whitePt[1];
 
         #if CV_SSE2
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
 
         CV_Assert(whitePt[1] == softdouble::one());
@@ -7902,7 +7783,7 @@ struct Luv2RGBfloat
         un = softfloat(4*13)*d*whitePt[0];
         vn = softfloat(9*13)*d*whitePt[1];
         #if CV_SSE2
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
 
         CV_Assert(whitePt[1] == softdouble::one());
@@ -8254,7 +8135,7 @@ struct RGB2Luv_b
         #elif CV_SSE2
         v_zero = _mm_setzero_si128();
         v_scale_inv = _mm_set1_ps(softfloat::one()/f255);
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
@@ -8495,7 +8376,7 @@ struct Luv2RGBinteger
         v_scale = _mm_set1_ps(255.f);
         v_zero = _mm_setzero_si128();
         v_alpha = _mm_set1_ps(ColorChannel<uchar>::max());
-        haveSIMD = hasSIMD128();
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
         #endif
     }
 
