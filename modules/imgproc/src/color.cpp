@@ -1153,7 +1153,7 @@ struct Gray2RGB5x5
     int greenBits;
 
     #if CV_SIMD128
-    v_uint16x8 v_n7, v_n3, v_zero;
+    v_uint16x8 v_n7, v_n3;
     bool haveSIMD;
     #endif
 };
@@ -1184,8 +1184,6 @@ struct RGB5x52Gray
         v_g2y = v_setall_u16(G2Y);
         v_r2y = v_setall_u16(R2Y);
         v_delta = v_setall_u16(1 << (yuv_shift - 1));
-        v_f8 = v_setall_u16(0xf8);
-        v_fc = v_setall_u16(0xfc);
         v_bg2y = v_reinterpret_as_s16(v_setall_u32(B2Y | G2Y << 16));
         v_rd2y = v_reinterpret_as_s16(v_setall_u32(R2Y | 1 << 16));
         haveSIMD = hasSIMD128();
@@ -1203,13 +1201,14 @@ struct RGB5x52Gray
                 for ( ; i <= n - 8; i += 8)
                 {
                     v_uint16x8 v_src = v_load((ushort *)src + i);
-                    v_uint16x8 v_t0 = (v_src << 3) & v_f8,
-                               v_t1 = (v_src >> 3) & v_fc,
-                               v_t2 = (v_src >> 8) & v_f8;
+                    v_uint16x8 v_b = (v_src << 11) >> 8,
+                               v_g = ((v_src >> 5) << 10) >> 8,
+                               v_r = (v_src >> 11) << 3;
+
                     v_uint32x4 v_hib, v_lob, v_hig, v_log, v_hir, v_lor;
                     v_uint16x8 v_lobg, v_lord, v_hibg, v_hird;
-                    v_zip(v_t0, v_t1, v_lobg, v_hibg);
-                    v_zip(v_t2, v_delta, v_lord, v_hird);
+                    v_zip(v_b, v_g, v_lobg, v_hibg);
+                    v_zip(v_r, v_delta, v_lord, v_hird);
 
                     v_uint32x4 v_bgrlo = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lobg), v_bg2y));
                     v_uint32x4 v_bgrhi = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hibg), v_bg2y));
@@ -1218,7 +1217,10 @@ struct RGB5x52Gray
                     v_uint32x4 v_dst0 = v_bgrlo >> yuv_shift;
                     v_uint32x4 v_dst1 = v_bgrhi >> yuv_shift;
 
-                    v_store_low(dst + i, v_pack_u(v_pack(v_reinterpret_as_s32(v_dst0), v_reinterpret_as_s32(v_dst1)),v_setzero_s16()));
+                    v_int16x8 v_dst = v_pack(v_reinterpret_as_s32(v_dst0), v_reinterpret_as_s32(v_dst1));
+                    v_uint8x16 v_dst11 = v_pack_u(v_dst,v_setzero_s16());
+
+                    v_store_low(dst + i, v_dst11);
                 }
             }
             #endif
@@ -1238,21 +1240,23 @@ struct RGB5x52Gray
                 for ( ; i <= n - 8; i += 8)
                 {
                     v_uint16x8 v_src = v_load((ushort *)src + i);
-                    v_uint16x8 v_t0 = (v_src << 3) & v_f8,
-                               v_t1 = (v_src >> 2) & v_f8,
-                               v_t2 = (v_src >> 7) & v_f8;
+                    v_uint16x8 v_b = (v_src << 11) >> 8,
+                               v_g = ((v_src >> 5) << 11) >> 8,
+                               v_r = ((v_src >> 10) << 11) >> 8;
 
                     v_uint32x4 v_hib, v_lob, v_hig, v_log, v_hir, v_lor;
-                    v_mul_expand(v_t0, v_b2y, v_hib, v_lob);
-                    v_mul_expand(v_t1, v_g2y, v_hig, v_log);
-                    v_mul_expand(v_t2, v_r2y, v_hir, v_lor);
+                    v_uint16x8 v_lobg, v_lord, v_hibg, v_hird;
+                    v_zip(v_b, v_g, v_lobg, v_hibg);
+                    v_zip(v_r, v_delta, v_lord, v_hird);
 
-                    v_uint32x4 v_dst0 = v_hib + v_hig + v_hir;
-                    v_uint32x4 v_dst1 = v_lob + v_log + v_lor;
-                    v_dst0 = (v_dst0 + v_reinterpret_as_u32(v_delta)) >> yuv_shift;
-                    v_dst1 = (v_dst1 + v_reinterpret_as_u32(v_delta)) >> yuv_shift;
+                    v_uint32x4 v_bgrlo = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lobg), v_bg2y));
+                    v_uint32x4 v_bgrhi = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hibg), v_bg2y));
+                    v_bgrlo = v_bgrlo + v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lord), v_rd2y));
+                    v_bgrhi = v_bgrhi + v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hird), v_rd2y));
+                    v_uint32x4 v_dst0 = v_bgrlo >> yuv_shift;
+                    v_uint32x4 v_dst1 = v_bgrhi >> yuv_shift;
 
-                    v_store_low(dst + i, v_pack(v_pack(v_dst0, v_dst1),v_setzero_u16()));
+                    v_store_low(dst + i, v_pack_u(v_pack(v_reinterpret_as_s32(v_dst0), v_reinterpret_as_s32(v_dst1)),v_setzero_s16()));
                 }
             }
             #endif
@@ -1273,8 +1277,6 @@ struct RGB5x52Gray
     v_uint16x8 v_g2y;
     v_uint16x8 v_r2y;
     v_uint16x8 v_delta;
-    v_uint16x8 v_f8;
-    v_uint16x8 v_fc;
     v_int16x8 v_bg2y;
     v_int16x8 v_rd2y;
     #endif
