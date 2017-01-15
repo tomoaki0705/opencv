@@ -1180,9 +1180,6 @@ struct RGB5x52Gray
     RGB5x52Gray(int _greenBits) : greenBits(_greenBits)
     {
         #if CV_SIMD128
-        v_b2y = v_setall_u16(B2Y);
-        v_g2y = v_setall_u16(G2Y);
-        v_r2y = v_setall_u16(R2Y);
         v_delta = v_setall_u16(1 << (yuv_shift - 1));
         v_bg2y = v_reinterpret_as_s16(v_setall_u32(B2Y | G2Y << 16));
         v_rd2y = v_reinterpret_as_s16(v_setall_u32(R2Y | 1 << 16));
@@ -1273,9 +1270,6 @@ struct RGB5x52Gray
 
     #if CV_SIMD128
     bool haveSIMD;
-    v_uint16x8 v_b2y;
-    v_uint16x8 v_g2y;
-    v_uint16x8 v_r2y;
     v_uint16x8 v_delta;
     v_int16x8 v_bg2y;
     v_int16x8 v_rd2y;
