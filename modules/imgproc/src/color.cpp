@@ -1179,10 +1179,21 @@ struct RGB5x52Gray
 
     RGB5x52Gray(int _greenBits) : greenBits(_greenBits)
     {
-        #if CV_SIMD128
-        v_delta = v_setall_u16(1 << (yuv_shift - 1));
-        v_bg2y = v_reinterpret_as_s16(v_setall_u32(B2Y | G2Y << 16));
-        v_rd2y = v_reinterpret_as_s16(v_setall_u32(R2Y | 1 << 16));
+        #if CV_SSE2
+        haveSIMD = checkHardwareSupport(CV_CPU_SSE2);
+        const __m128i v_b2y = _mm_set1_epi16(B2Y);
+        const __m128i v_g2y = _mm_set1_epi16(G2Y);
+        v_bg2y = _mm_unpacklo_epi16(v_b2y, v_g2y);
+        const __m128i v_r2y = _mm_set1_epi16(R2Y);
+        const __m128i v_one = _mm_set1_epi16(1);
+        v_rd2y = _mm_unpacklo_epi16(v_r2y, v_one);
+        v_delta = _mm_slli_epi16(v_one, yuv_shift - 1);
+        #elif CV_SIMD128
+        v_delta = v_setall_u32(1 << (yuv_shift - 1));
+        v_b2y = v_setall_u16(B2Y);
+        v_g2y = v_setall_u16(G2Y);
+        v_r2y = v_setall_u16(R2Y);
+        v_d2y = v_setall_u16(1);
         haveSIMD = hasSIMD128();
         #endif
     }
@@ -1192,7 +1203,36 @@ struct RGB5x52Gray
         int i = 0;
         if( greenBits == 6 )
         {
-            #if CV_SIMD128
+            #if CV_SSE2
+            if (haveSIMD)
+            {
+                for ( ; i <= n - 8; i += 8)
+                {
+                    __m128i v_src = _mm_loadu_si128((__m128i const *)((ushort *)src + i));
+                    __m128i v_b = _mm_srli_epi16(_mm_slli_epi16(v_src, 11), 8),
+                            v_g = _mm_srli_epi16(_mm_slli_epi16(_mm_srli_epi16(v_src, 5), 10),8),
+                            v_r = _mm_slli_epi16(_mm_srli_epi16(v_src, 11), 3);
+
+                    __m128i v_bg_lo = _mm_unpacklo_epi16(v_b, v_g);
+                    __m128i v_rd_lo = _mm_unpacklo_epi16(v_r, v_delta);
+                    __m128i v_bg_hi = _mm_unpackhi_epi16(v_b, v_g);
+                    __m128i v_rd_hi = _mm_unpackhi_epi16(v_r, v_delta);
+                    v_bg_lo = _mm_madd_epi16(v_bg_lo, v_bg2y);
+                    v_rd_lo = _mm_madd_epi16(v_rd_lo, v_rd2y);
+                    v_bg_hi = _mm_madd_epi16(v_bg_hi, v_bg2y);
+                    v_rd_hi = _mm_madd_epi16(v_rd_hi, v_rd2y);
+
+                    __m128i v_bgr_lo = _mm_add_epi32(v_bg_lo, v_rd_lo);
+                    __m128i v_bgr_hi = _mm_add_epi32(v_bg_hi, v_rd_hi);
+                    v_bgr_lo = _mm_srli_epi32(v_bgr_lo, yuv_shift);
+                    v_bgr_hi = _mm_srli_epi32(v_bgr_hi, yuv_shift);
+
+                    __m128i v_dst = _mm_packs_epi32(v_bgr_lo, v_bgr_hi);
+                    v_dst = _mm_packus_epi16(v_dst, v_dst);
+                    _mm_storel_epi64((__m128i *)(dst + i), v_dst);
+                }
+            }
+            #elif CV_SIMD128
             if (haveSIMD)
             {
                 for ( ; i <= n - 8; i += 8)
@@ -1203,21 +1243,15 @@ struct RGB5x52Gray
                                v_r = (v_src >> 11) << 3;
 
                     v_uint32x4 v_hib, v_lob, v_hig, v_log, v_hir, v_lor;
-                    v_uint16x8 v_lobg, v_lord, v_hibg, v_hird;
-                    v_zip(v_b, v_g, v_lobg, v_hibg);
-                    v_zip(v_r, v_delta, v_lord, v_hird);
+                    v_mul_expand(v_b, v_b2y, v_lob, v_hib);
+                    v_mul_expand(v_g, v_g2y, v_log, v_hig);
+                    v_mul_expand(v_r, v_r2y, v_lor, v_hir);
 
-                    v_uint32x4 v_bgrlo = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lobg), v_bg2y));
-                    v_uint32x4 v_bgrhi = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hibg), v_bg2y));
-                    v_bgrlo = v_bgrlo + v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lord), v_rd2y));
-                    v_bgrhi = v_bgrhi + v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hird), v_rd2y));
-                    v_uint32x4 v_dst0 = v_bgrlo >> yuv_shift;
-                    v_uint32x4 v_dst1 = v_bgrhi >> yuv_shift;
+                    v_uint32x4 v_dst0 = (v_lob + v_log + v_lor + v_delta) >> yuv_shift;
+                    v_uint32x4 v_dst1 = (v_hib + v_hig + v_hir + v_delta) >> yuv_shift;
 
-                    v_int16x8 v_dst = v_pack(v_reinterpret_as_s32(v_dst0), v_reinterpret_as_s32(v_dst1));
-                    v_uint8x16 v_dst11 = v_pack_u(v_dst,v_setzero_s16());
-
-                    v_store_low(dst + i, v_dst11);
+                    v_uint8x16 v_dst = v_pack(v_pack(v_dst0, v_dst1),v_setzero_u16());
+                    v_store_low(dst + i, v_dst);
                 }
             }
             #endif
@@ -1231,7 +1265,36 @@ struct RGB5x52Gray
         }
         else
         {
-            #if CV_SIMD128
+            #if CV_SSE2
+            if (haveSIMD)
+            {
+                for ( ; i <= n - 8; i += 8)
+                {
+                    __m128i v_src = _mm_loadu_si128((__m128i const *)((ushort *)src + i));
+                    __m128i v_b = _mm_srli_epi16(_mm_slli_epi16(v_src, 11), 8),
+                            v_g = _mm_srli_epi16(_mm_slli_epi16(_mm_srli_epi16(v_src, 5), 11),8),
+                            v_r = _mm_srli_epi16(_mm_slli_epi16(_mm_srli_epi16(v_src, 10), 11),8);
+
+                    __m128i v_bg_lo = _mm_unpacklo_epi16(v_b, v_g);
+                    __m128i v_rd_lo = _mm_unpacklo_epi16(v_r, v_delta);
+                    __m128i v_bg_hi = _mm_unpackhi_epi16(v_b, v_g);
+                    __m128i v_rd_hi = _mm_unpackhi_epi16(v_r, v_delta);
+                    v_bg_lo = _mm_madd_epi16(v_bg_lo, v_bg2y);
+                    v_rd_lo = _mm_madd_epi16(v_rd_lo, v_rd2y);
+                    v_bg_hi = _mm_madd_epi16(v_bg_hi, v_bg2y);
+                    v_rd_hi = _mm_madd_epi16(v_rd_hi, v_rd2y);
+
+                    __m128i v_bgr_lo = _mm_add_epi32(v_bg_lo, v_rd_lo);
+                    __m128i v_bgr_hi = _mm_add_epi32(v_bg_hi, v_rd_hi);
+                    v_bgr_lo = _mm_srli_epi32(v_bgr_lo, yuv_shift);
+                    v_bgr_hi = _mm_srli_epi32(v_bgr_hi, yuv_shift);
+
+                    __m128i v_dst = _mm_packs_epi32(v_bgr_lo, v_bgr_hi);
+                    v_dst = _mm_packus_epi16(v_dst, v_dst);
+                    _mm_storel_epi64((__m128i *)(dst + i), v_dst);
+                }
+            }
+            #elif CV_SIMD128
             if (haveSIMD)
             {
                 for ( ; i <= n - 8; i += 8)
@@ -1242,18 +1305,15 @@ struct RGB5x52Gray
                                v_r = ((v_src >> 10) << 11) >> 8;
 
                     v_uint32x4 v_hib, v_lob, v_hig, v_log, v_hir, v_lor;
-                    v_uint16x8 v_lobg, v_lord, v_hibg, v_hird;
-                    v_zip(v_b, v_g, v_lobg, v_hibg);
-                    v_zip(v_r, v_delta, v_lord, v_hird);
+                    v_mul_expand(v_b, v_b2y, v_lob, v_hib);
+                    v_mul_expand(v_g, v_g2y, v_log, v_hig);
+                    v_mul_expand(v_r, v_r2y, v_lor, v_hir);
 
-                    v_uint32x4 v_bgrlo = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lobg), v_bg2y));
-                    v_uint32x4 v_bgrhi = v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hibg), v_bg2y));
-                    v_bgrlo = v_bgrlo + v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_lord), v_rd2y));
-                    v_bgrhi = v_bgrhi + v_reinterpret_as_u32(v_dotprod(v_reinterpret_as_s16(v_hird), v_rd2y));
-                    v_uint32x4 v_dst0 = v_bgrlo >> yuv_shift;
-                    v_uint32x4 v_dst1 = v_bgrhi >> yuv_shift;
+                    v_uint32x4 v_dst0 = (v_lob + v_log + v_lor + v_delta) >> yuv_shift;
+                    v_uint32x4 v_dst1 = (v_hib + v_hig + v_hir + v_delta) >> yuv_shift;
 
-                    v_store_low(dst + i, v_pack_u(v_pack(v_reinterpret_as_s32(v_dst0), v_reinterpret_as_s32(v_dst1)),v_setzero_s16()));
+                    v_uint8x16 v_dst = v_pack(v_pack(v_dst0, v_dst1),v_setzero_u16());
+                    v_store_low(dst + i, v_dst);
                 }
             }
             #endif
@@ -1268,11 +1328,17 @@ struct RGB5x52Gray
     }
     int greenBits;
 
-    #if CV_SIMD128
+    #if CV_SSE2
     bool haveSIMD;
-    v_uint16x8 v_delta;
-    v_int16x8 v_bg2y;
-    v_int16x8 v_rd2y;
+    __m128i v_bg2y, v_rd2y;
+    __m128i v_delta;
+    #elif CV_SIMD128
+    bool haveSIMD;
+    v_uint32x4 v_delta;
+    v_uint16x8 v_b2y;
+    v_uint16x8 v_g2y;
+    v_uint16x8 v_r2y;
+    v_uint16x8 v_d2y;
     #endif
 };
 
