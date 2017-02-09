@@ -499,8 +499,8 @@ public:
 
     int bayer2RGBA(const uchar*, int, uchar*, int, int) const
     {
-        return 0;
-    }
+            return 0;
+        }
 
     int bayer2RGB_EA(const uchar* bayer, int bayer_step, uchar* dst, int width, int blue) const
     {
