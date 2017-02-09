@@ -1195,6 +1195,26 @@ template<int imm> \
 inline _Tpsvec v_shr(const _Tpsvec& a) \
 { \
     return _Tpsvec(srai(a.val, imm)); \
+} \
+template<int imm> \
+inline _Tpsvec v_byte_shift_right(const _Tpsvec& a) \
+{ \
+    return _Tpsvec(_mm_srli_si128(a.val, imm)); \
+} \
+template<int imm> \
+inline _Tpuvec v_byte_shift_right(const _Tpuvec& a) \
+{ \
+    return _Tpuvec(_mm_srli_si128(a.val, imm)); \
+} \
+template <int imm> \
+inline _Tpsvec v_byte_shift_left(const _Tpsvec& a) \
+{ \
+    return _Tpsvec(_mm_slli_si128(a.val, imm)); \
+} \
+template <int imm> \
+inline _Tpuvec v_byte_shift_left(const _Tpuvec& a) \
+{ \
+    return _Tpuvec(_mm_slli_si128(a.val, imm)); \
 }
 
 OPENCV_HAL_IMPL_SSE_SHIFT_OP(v_uint16x8, v_int16x8, epi16, _mm_srai_epi16)

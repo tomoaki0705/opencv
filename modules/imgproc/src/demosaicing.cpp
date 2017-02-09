@@ -86,6 +86,7 @@
 
 
 #include "precomp.hpp"
+#include "opencv2/core/hal/intrin.hpp"
 
 #include <limits>
 
@@ -122,7 +123,7 @@ public:
     }
 };
 
-#if CV_SSE2
+#if CV_SSE2 && 0
 class SIMDBayerInterpolator_8u
 {
 public:
@@ -263,6 +264,234 @@ public:
             _mm_storel_epi64((__m128i*)(dst-1+6*5), _mm_srli_si128(g0, 8));
 
             _mm_storel_epi64((__m128i*)(dst-1+6*6), g1);
+        }
+
+        return (int)(bayer - (bayer_end - width));
+    }
+
+    int bayer2RGBA(const uchar*, int, uchar*, int, int) const
+    {
+        return 0;
+    }
+
+    int bayer2RGB_EA(const uchar* bayer, int bayer_step, uchar* dst, int width, int blue) const
+    {
+        if (!use_simd)
+            return 0;
+
+        const uchar* bayer_end = bayer + width;
+        __m128i masklow = _mm_set1_epi16(0x00ff);
+        __m128i delta1 = _mm_set1_epi16(1), delta2 = _mm_set1_epi16(2);
+        __m128i full = _mm_set1_epi16(-1), z = _mm_setzero_si128();
+        __m128i mask = _mm_set1_epi16(blue > 0 ? -1 : 0);
+
+        for ( ; bayer <= bayer_end - 18; bayer += 14, dst += 42)
+        {
+            /*
+             B G B G | B G B G | B G B G | B G B G
+             G R G R | G R G R | G R G R | G R G R
+             B G B G | B G B G | B G B G | B G B G
+             */
+
+            __m128i r0 = _mm_loadu_si128((const __m128i*)bayer);
+            __m128i r1 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step));
+            __m128i r2 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step*2));
+
+            __m128i b1 = _mm_add_epi16(_mm_and_si128(r0, masklow), _mm_and_si128(r2, masklow));
+            __m128i nextb1 = _mm_srli_si128(b1, 2);
+            __m128i b0 = _mm_add_epi16(b1, nextb1);
+            b1 = _mm_srli_epi16(_mm_add_epi16(nextb1, delta1), 1);
+            b0 = _mm_srli_epi16(_mm_add_epi16(b0, delta2), 2);
+            // b0 b2 ... b14 b1 b3 ... b15
+            b0 = _mm_packus_epi16(b0, b1);
+
+            // vertical sum
+            __m128i r0g = _mm_srli_epi16(r0, 8);
+            __m128i r2g = _mm_srli_epi16(r2, 8);
+            __m128i sumv = _mm_srli_epi16(_mm_add_epi16(_mm_add_epi16(r0g, r2g), delta1), 1);
+            // gorizontal sum
+            __m128i g1 = _mm_and_si128(masklow, r1);
+            __m128i nextg1 = _mm_srli_si128(g1, 2);
+            __m128i sumg = _mm_srli_epi16(_mm_add_epi16(_mm_add_epi16(g1, nextg1), delta1), 1);
+
+            // gradients
+            __m128i gradv = _mm_adds_epi16(_mm_subs_epu16(r0g, r2g), _mm_subs_epu16(r2g, r0g));
+            __m128i gradg = _mm_adds_epi16(_mm_subs_epu16(nextg1, g1), _mm_subs_epu16(g1, nextg1));
+            __m128i gmask = _mm_cmpgt_epi16(gradg, gradv);
+
+            __m128i g0 = _mm_add_epi16(_mm_and_si128(gmask, sumv), _mm_and_si128(sumg, _mm_xor_si128(gmask, full)));
+            // g0 g2 ... g14 g1 g3 ...
+            g0 = _mm_packus_epi16(g0, nextg1);
+
+            r0 = _mm_srli_epi16(r1, 8);
+            r1 = _mm_add_epi16(r0, _mm_srli_si128(r0, 2));
+            r1 = _mm_srli_epi16(_mm_add_epi16(r1, delta1), 1);
+            // r0 r2 ... r14 r1 r3 ... r15
+            r0 = _mm_packus_epi16(r0, r1);
+
+            b1 = _mm_and_si128(_mm_xor_si128(b0, r0), mask);
+            b0 = _mm_xor_si128(b0, b1);
+            r0 = _mm_xor_si128(r0, b1);
+
+            // b1 g1 b3 g3 b5 g5...
+            b1 = _mm_unpackhi_epi8(b0, g0);
+            // b0 g0 b2 g2 b4 g4 ....
+            b0 = _mm_unpacklo_epi8(b0, g0);
+
+            // r1 0 r3 0 r5 0 ...
+            r1 = _mm_unpackhi_epi8(r0, z);
+            // r0 0 r2 0 r4 0 ...
+            r0 = _mm_unpacklo_epi8(r0, z);
+
+            // 0 b0 g0 r0 0 b2 g2 r2 ...
+            g0 = _mm_slli_si128(_mm_unpacklo_epi16(b0, r0), 1);
+            // 0 b8 g8 r8 0 b10 g10 r10 ...
+            g1 = _mm_slli_si128(_mm_unpackhi_epi16(b0, r0), 1);
+
+            // b1 g1 r1 0 b3 g3 r3 0 ...
+            r0 = _mm_unpacklo_epi16(b1, r1);
+            // b9 g9 r9 0 b11 g11 r11 0 ...
+            r1 = _mm_unpackhi_epi16(b1, r1);
+
+            // 0 b0 g0 r0 b1 g1 r1 0 ...
+            b0 = _mm_srli_si128(_mm_unpacklo_epi32(g0, r0), 1);
+            // 0 b4 g4 r4 b5 g5 r5 0 ...
+            b1 = _mm_srli_si128(_mm_unpackhi_epi32(g0, r0), 1);
+
+            _mm_storel_epi64((__m128i*)(dst+0), b0);
+            _mm_storel_epi64((__m128i*)(dst+6*1), _mm_srli_si128(b0, 8));
+            _mm_storel_epi64((__m128i*)(dst+6*2), b1);
+            _mm_storel_epi64((__m128i*)(dst+6*3), _mm_srli_si128(b1, 8));
+
+            // 0 b8 g8 r8 b9 g9 r9 0 ...
+            g0 = _mm_srli_si128(_mm_unpacklo_epi32(g1, r1), 1);
+            // 0 b12 g12 r12 b13 g13 r13 0 ...
+            g1 = _mm_srli_si128(_mm_unpackhi_epi32(g1, r1), 1);
+
+            _mm_storel_epi64((__m128i*)(dst+6*4), g0);
+            _mm_storel_epi64((__m128i*)(dst+6*5), _mm_srli_si128(g0, 8));
+
+            _mm_storel_epi64((__m128i*)(dst+6*6), g1);
+        }
+
+        return int(bayer - (bayer_end - width));
+    }
+
+    bool use_simd;
+};
+#elif CV_SIMD128
+template<typename T>
+static inline void v_load_deinterleave_expand(const T* ptr, v_uint16x8&a, v_uint16x8& b)
+{
+    const v_uint16x8 masklo = v_setall_u16(0x00ff);
+    v_uint16x8 _a = v_load((const ushort*)ptr); // a0  b0  a1  b1  a2  b2  a3  b3  a4  b4  a5  b5  a6  b6  a7  b7
+    a = _a & masklo;
+    b = (_a >> 8) & masklo;
+}
+
+class SIMDBayerInterpolator_8u
+{
+public:
+    SIMDBayerInterpolator_8u()
+    {
+        use_simd = hasSIMD128();
+    }
+
+    int bayer2Gray(const uchar* bayer, int bayer_step, uchar* dst,
+                   int width, int bcoeff, int gcoeff, int rcoeff) const
+    {
+        if( !use_simd )
+            return 0;
+
+        __m128i _b2y = _mm_set1_epi16((short)(rcoeff*2));
+        __m128i _g2y = _mm_set1_epi16((short)(gcoeff*2));
+        __m128i _r2y = _mm_set1_epi16((short)(bcoeff*2));
+        const uchar* bayer_end = bayer + width;
+
+        for( ; bayer <= bayer_end - 18; bayer += 14, dst += 14 )
+        {
+            __m128i r0 = _mm_loadu_si128((const __m128i*)bayer);
+            __m128i r1 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step));
+            __m128i r2 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step*2));
+
+            __m128i b1 = _mm_add_epi16(_mm_srli_epi16(_mm_slli_epi16(r0, 8), 7),
+                                       _mm_srli_epi16(_mm_slli_epi16(r2, 8), 7));
+            __m128i b0 = _mm_add_epi16(b1, _mm_srli_si128(b1, 2));
+            b1 = _mm_slli_epi16(_mm_srli_si128(b1, 2), 1);
+
+            __m128i g0 = _mm_add_epi16(_mm_srli_epi16(r0, 7), _mm_srli_epi16(r2, 7));
+            __m128i g1 = _mm_srli_epi16(_mm_slli_epi16(r1, 8), 7);
+            g0 = _mm_add_epi16(g0, _mm_add_epi16(g1, _mm_srli_si128(g1, 2)));
+            g1 = _mm_slli_epi16(_mm_srli_si128(g1, 2), 2);
+
+            r0 = _mm_srli_epi16(r1, 8);
+            r1 = _mm_slli_epi16(_mm_add_epi16(r0, _mm_srli_si128(r0, 2)), 2);
+            r0 = _mm_slli_epi16(r0, 3);
+
+            g0 = _mm_add_epi16(_mm_mulhi_epi16(b0, _b2y), _mm_mulhi_epi16(g0, _g2y));
+            g1 = _mm_add_epi16(_mm_mulhi_epi16(b1, _b2y), _mm_mulhi_epi16(g1, _g2y));
+            g0 = _mm_add_epi16(g0, _mm_mulhi_epi16(r0, _r2y));
+            g1 = _mm_add_epi16(g1, _mm_mulhi_epi16(r1, _r2y));
+            g0 = _mm_srli_epi16(g0, 2);
+            g1 = _mm_srli_epi16(g1, 2);
+            g0 = _mm_packus_epi16(g0, g0);
+            g1 = _mm_packus_epi16(g1, g1);
+            g0 = _mm_unpacklo_epi8(g0, g1);
+            _mm_storeu_si128((__m128i*)dst, g0);
+        }
+
+        return (int)(bayer - (bayer_end - width));
+    }
+
+    int bayer2RGB(const uchar* bayer, int bayer_step, uchar* dst, int width, int blue) const
+    {
+        if( !use_simd )
+            return 0;
+        /*
+         B G B G | B G B G | B G B G | B G B G
+         G R G R | G R G R | G R G R | G R G R
+         B G B G | B G B G | B G B G | B G B G
+         */
+
+        v_uint16x8 delta1 = v_setall_u16(1), delta2 = v_setall_u16(2);
+        v_uint16x8 mask = v_setall_u16(blue < 0 ? -1 : 0);
+        const uchar* bayer_end = bayer + width;
+
+        for( ; bayer <= bayer_end - 18; bayer += 14, dst += 42 )
+        {
+            v_uint16x8 v_bs0, v_bs1, v_rs0, v_gs0, v_gs1, v_gs2;
+            v_load_deinterleave_expand(bayer, v_bs0, v_gs0);
+            v_load_deinterleave_expand(bayer+bayer_step, v_gs1, v_rs0);
+            v_load_deinterleave_expand(bayer+bayer_step*2, v_bs1, v_gs2);
+
+            // interpolate vertically
+            v_uint16x8 b1 = v_bs0 + v_bs1;
+            // interpolate diagonally
+            v_uint16x8 nextb1 = v_byte_shift_right<2>(b1);
+            v_uint16x8 b0 = b1 + nextb1;
+
+            b1 = ((nextb1 + delta1) >> 1) << 8;
+            b0 = (b0 + delta2) >> 2;
+            b0 = b1 | b0;
+
+            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
+            // interpolate cross
+            v_uint16x8 g0 = v_gs0 + v_gs1 + v_gs2 + g1;
+            g0 = (g0 + delta2) >> 2;
+            g1 = g1 << 8;
+            g0 = g1 | g0;
+
+            // interpolate horizontally
+            v_uint16x8 r0 = (((v_rs0 + v_byte_shift_right<2>(v_rs0) + delta1) >> 1) << 8);
+            r0 = v_rs0 | r0;
+
+            // swap b and r
+            b1 = (b0 ^ r0) & mask;
+            b0 = b0 ^ b1;
+            r0 = r0 ^ b1;
+
+            // store to memory
+            v_store_interleave(dst-1, v_reinterpret_as_u8(b0), v_reinterpret_as_u8(g0), v_reinterpret_as_u8(r0));
         }
 
         return (int)(bayer - (bayer_end - width));
