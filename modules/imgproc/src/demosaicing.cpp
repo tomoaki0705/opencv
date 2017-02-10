@@ -98,6 +98,18 @@ namespace cv
 
 //////////////////////////// Bayer Pattern -> RGB conversion /////////////////////////////
 
+template <typename T>
+struct Alpha
+{
+    static T value() { return std::numeric_limits<T>::max(); }
+};
+
+template <>
+struct Alpha<float>
+{
+    static float value() { return 1.0f; }
+};
+
 template<typename T>
 class SIMDBayerStubInterpolator_
 {
@@ -497,10 +509,60 @@ public:
         return (int)(bayer - (bayer_end - width));
     }
 
-    int bayer2RGBA(const uchar*, int, uchar*, int, int) const
+    int bayer2RGBA(const uchar* bayer, int bayer_step, uchar* dst, int width, int blue) const
     {
+        if( !use_simd )
             return 0;
+        /*
+         B G B G | B G B G | B G B G | B G B G
+         G R G R | G R G R | G R G R | G R G R
+         B G B G | B G B G | B G B G | B G B G
+         */
+
+        v_uint16x8 delta1 = v_setall_u16(1), delta2 = v_setall_u16(2);
+        v_uint16x8 mask = v_setall_u16(blue < 0 ? -1 : 0);
+        v_uint8x16 alpha = v_setall_u8(Alpha<uchar>::value());
+        const uchar* bayer_end = bayer + width;
+
+        for( ; bayer <= bayer_end - 18; bayer += 14, dst += 42 )
+        {
+            v_uint16x8 v_bs0, v_bs1, v_rs0, v_gs0, v_gs1, v_gs2;
+            v_load_deinterleave_expand(bayer, v_bs0, v_gs0);
+            v_load_deinterleave_expand(bayer+bayer_step, v_gs1, v_rs0);
+            v_load_deinterleave_expand(bayer+bayer_step*2, v_bs1, v_gs2);
+
+            // interpolate vertically
+            v_uint16x8 b1 = v_bs0 + v_bs1;
+            // interpolate diagonally
+            v_uint16x8 nextb1 = v_byte_shift_right<2>(b1);
+            v_uint16x8 b0 = b1 + nextb1;
+
+            b1 = ((nextb1 + delta1) >> 1) << 8;
+            b0 = (b0 + delta2) >> 2;
+            b0 = b1 | b0;
+
+            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
+            // interpolate cross
+            v_uint16x8 g0 = v_gs0 + v_gs1 + v_gs2 + g1;
+            g0 = (g0 + delta2) >> 2;
+            g1 = g1 << 8;
+            g0 = g1 | g0;
+
+            // interpolate horizontally
+            v_uint16x8 r0 = (((v_rs0 + v_byte_shift_right<2>(v_rs0) + delta1) >> 1) << 8);
+            r0 = v_rs0 | r0;
+
+            // swap b and r
+            b1 = (b0 ^ r0) & mask;
+            b0 = b0 ^ b1;
+            r0 = r0 ^ b1;
+
+            // store to memory
+            v_store_interleave(dst-1, v_reinterpret_as_u8(b0), v_reinterpret_as_u8(g0), v_reinterpret_as_u8(r0), alpha);
         }
+
+        return (int)(bayer - (bayer_end - width));
+    }
 
     int bayer2RGB_EA(const uchar* bayer, int bayer_step, uchar* dst, int width, int blue) const
     {
@@ -919,18 +981,6 @@ static void Bayer2Gray_( const Mat& srcmat, Mat& dstmat, int code )
         for( int i = 0; i < size.width; i++ )
             dst0[i] = dst0[i + (size.height-1)*dst_step] = 0;
 }
-
-template <typename T>
-struct Alpha
-{
-    static T value() { return std::numeric_limits<T>::max(); }
-};
-
-template <>
-struct Alpha<float>
-{
-    static float value() { return 1.0f; }
-};
 
 template <typename T, typename SIMDInterpolator>
 class Bayer2RGB_Invoker :
