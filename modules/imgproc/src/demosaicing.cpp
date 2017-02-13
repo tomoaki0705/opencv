@@ -409,6 +409,11 @@ static inline v_uint16x8 average4(const v_uint16x8& a, const v_uint16x8& b, cons
     const v_uint16x8 delta2 = v_setall_u16(2);
     return (a + b + c + d + delta2) >> 2;
 }
+static inline v_uint16x8 average2(const v_uint16x8& a, const v_uint16x8& b)
+{
+    const v_uint16x8 delta1 = v_setall_u16(1);
+    return (a + b + delta1) >> 1;
+}
 static inline void swap_r_b(v_uint16x8& r, v_uint16x8& b, const v_uint16x8& do_swap)
 {
     v_uint16x8 x = (b ^ r) & do_swap;
@@ -503,13 +508,14 @@ public:
             b0 = (b0 + delta2) >> 2;
             b0 = v_interleave_pack(b0, b1);
 
-            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
             // interpolate cross
+            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
             v_uint16x8 g0 = average4(v_gs0, v_gs1, v_gs2, g1);
             g0 = v_interleave_pack(g0, g1);
 
             // interpolate horizontally
-            v_uint16x8 r0 = (v_rs0 + v_byte_shift_right<2>(v_rs0) + delta1) >> 1;
+            v_uint16x8 r1 = v_byte_shift_right<2>(v_rs0);
+            v_uint16x8 r0 = average2(v_rs0, r1);
             r0 = v_interleave_pack(v_rs0, r0);
 
             // swap b and r
@@ -554,13 +560,14 @@ public:
             b0 = (b0 + delta2) >> 2;
             b0 = v_interleave_pack(b0, b1);
 
-            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
             // interpolate cross
+            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
             v_uint16x8 g0 = average4(v_gs0, v_gs1, v_gs2, g1);
             g0 = v_interleave_pack(g0, g1);
 
             // interpolate horizontally
-            v_uint16x8 r0 = (v_rs0 + v_byte_shift_right<2>(v_rs0) + delta1) >> 1;
+            v_uint16x8 r1 = v_byte_shift_right<2>(v_rs0);
+            v_uint16x8 r0 = average2(v_rs0, r1);
             r0 = v_interleave_pack(v_rs0, r0);
 
             // swap b and r
@@ -621,7 +628,8 @@ public:
             g0 = v_interleave_pack(g0, nextg1);
 
             // interpolate horizontally
-            v_uint16x8 r0 = (v_rs0 + v_byte_shift_right<2>(v_rs0) + delta1) >> 1;
+            v_uint16x8 r1 = v_byte_shift_right<2>(v_rs0);
+            v_uint16x8 r0 = average2(v_rs0, r1);
             r0 = v_interleave_pack(v_rs0, r0);
 
             // swap b and r
