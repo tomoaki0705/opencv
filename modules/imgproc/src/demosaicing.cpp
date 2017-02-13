@@ -437,16 +437,20 @@ public:
         if( !use_simd )
             return 0;
 
-        __m128i _b2y = _mm_set1_epi16((short)(rcoeff*2));
-        __m128i _g2y = _mm_set1_epi16((short)(gcoeff*2));
-        __m128i _r2y = _mm_set1_epi16((short)(bcoeff*2));
+        v_uint16x8 _b2y = v_setall_u16((short)(rcoeff*2));
+        v_uint16x8 _g2y = v_setall_u16((short)(gcoeff*2));
+        v_uint16x8 _r2y = v_setall_u16((short)(bcoeff*2));
         const uchar* bayer_end = bayer + width;
 
         for( ; bayer <= bayer_end - 18; bayer += 14, dst += 14 )
         {
-            __m128i r0 = _mm_loadu_si128((const __m128i*)bayer);
-            __m128i r1 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step));
-            __m128i r2 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step*2));
+            v_uint16x8 v_gs0, v_gs1, v_gs2, v_bs0, v_bs1, v_rs0;
+            v_load_deinterleave_expand((ushort*)bayer, v_gs0, v_bs0);
+            v_load_deinterleave_expand((ushort*)(bayer+bayer_step), v_rs0, v_gs1);
+            v_load_deinterleave_expand((ushort*)(bayer+bayer_step*2), v_gs2, v_bs1);
+            //__m128i r0 = _mm_loadu_si128((const __m128i*)bayer);
+            //__m128i r1 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step));
+            //__m128i r2 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step*2));
 
             __m128i b1 = _mm_add_epi16(_mm_srli_epi16(_mm_slli_epi16(r0, 8), 7),
                                        _mm_srli_epi16(_mm_slli_epi16(r2, 8), 7));
@@ -466,11 +470,14 @@ public:
             g1 = _mm_add_epi16(_mm_mulhi_epi16(b1, _b2y), _mm_mulhi_epi16(g1, _g2y));
             g0 = _mm_add_epi16(g0, _mm_mulhi_epi16(r0, _r2y));
             g1 = _mm_add_epi16(g1, _mm_mulhi_epi16(r1, _r2y));
+
             g0 = _mm_srli_epi16(g0, 2);
             g1 = _mm_srli_epi16(g1, 2);
+
             g0 = _mm_packus_epi16(g0, g0);
             g1 = _mm_packus_epi16(g1, g1);
             g0 = _mm_unpacklo_epi8(g0, g1);
+
             _mm_storeu_si128((__m128i*)dst, g0);
         }
 
