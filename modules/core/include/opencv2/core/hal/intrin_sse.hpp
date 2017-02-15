@@ -880,6 +880,16 @@ OPENCV_HAL_IMPL_SSE_BIN_FUNC(v_float32x4, v_max, _mm_max_ps)
 OPENCV_HAL_IMPL_SSE_BIN_FUNC(v_float64x2, v_min, _mm_min_pd)
 OPENCV_HAL_IMPL_SSE_BIN_FUNC(v_float64x2, v_max, _mm_max_pd)
 
+#define OPENCV_HAL_IMPL_SSE_FIEXEDPOINT_MULTIPLY(_Tpvec, suffix, offset) \
+inline _Tpvec v_mul_fixed_point(const _Tpvec& a, const _Tpvec& s) \
+{ \
+    __m128i scale = _mm_mullo_##suffix(s.val, _mm_set1_##suffix(offset)); \
+    return _Tpvec(_mm_mulhi_##suffix(a.val, scale)); \
+}
+
+OPENCV_HAL_IMPL_SSE_FIEXEDPOINT_MULTIPLY(v_int16x8, epi16, 4)
+OPENCV_HAL_IMPL_SSE_FIEXEDPOINT_MULTIPLY(v_uint16x8, epi16, 4)
+
 inline v_int8x16 v_min(const v_int8x16& a, const v_int8x16& b)
 {
 #if CV_SSE4_1

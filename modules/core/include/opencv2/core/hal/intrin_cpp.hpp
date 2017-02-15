@@ -947,6 +947,11 @@ template<typename _Tp, int n> inline v_reg<_Tp, n> v_mul_hi(const v_reg<_Tp, n>&
     return c;
 }
 
+/** @brief Multiply using fixed points
+
+Multiply two vectors per elements and store results using Q2.14 format
+
+**/
 //! @cond IGNORED
 template<typename _Tp, int n> inline void v_hsum(const v_reg<_Tp, n>& a,
                                                  v_reg<typename V_TypeTraits<_Tp>::w_type, n/2>& c)

@@ -448,35 +448,26 @@ public:
             v_load_deinterleave_expand((ushort*)bayer, v_gs0, v_bs0);
             v_load_deinterleave_expand((ushort*)(bayer+bayer_step), v_rs0, v_gs1);
             v_load_deinterleave_expand((ushort*)(bayer+bayer_step*2), v_gs2, v_bs1);
-            //__m128i r0 = _mm_loadu_si128((const __m128i*)bayer);
-            //__m128i r1 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step));
-            //__m128i r2 = _mm_loadu_si128((const __m128i*)(bayer+bayer_step*2));
 
-            __m128i b1 = _mm_add_epi16(_mm_srli_epi16(_mm_slli_epi16(r0, 8), 7),
-                                       _mm_srli_epi16(_mm_slli_epi16(r2, 8), 7));
-            __m128i b0 = _mm_add_epi16(b1, _mm_srli_si128(b1, 2));
-            b1 = _mm_slli_epi16(_mm_srli_si128(b1, 2), 1);
+            // interpolate vertically
+            v_uint16x8 b1 = v_bs0 + v_bs1;
+            // interpolate diagonally
+            v_uint16x8 nextb1 = v_byte_shift_right<2>(b1);
+            v_uint16x8 b0 = b1 + nextb1;
 
-            __m128i g0 = _mm_add_epi16(_mm_srli_epi16(r0, 7), _mm_srli_epi16(r2, 7));
-            __m128i g1 = _mm_srli_epi16(_mm_slli_epi16(r1, 8), 7);
-            g0 = _mm_add_epi16(g0, _mm_add_epi16(g1, _mm_srli_si128(g1, 2)));
-            g1 = _mm_slli_epi16(_mm_srli_si128(g1, 2), 2);
+            b1 = (nextb1 + delta1) >> 1;
+            b0 = (b0 + delta2) >> 2;
+            b0 = v_interleave_pack(b0, b1);
 
-            r0 = _mm_srli_epi16(r1, 8);
-            r1 = _mm_slli_epi16(_mm_add_epi16(r0, _mm_srli_si128(r0, 2)), 2);
-            r0 = _mm_slli_epi16(r0, 3);
+            // interpolate cross
+            v_uint16x8 g1 = v_byte_shift_right<2>(v_gs1);
+            v_uint16x8 g0 = average4(v_gs0, v_gs1, v_gs2, g1);
+            g0 = v_interleave_pack(g0, g1);
 
-            g0 = _mm_add_epi16(_mm_mulhi_epi16(b0, _b2y), _mm_mulhi_epi16(g0, _g2y));
-            g1 = _mm_add_epi16(_mm_mulhi_epi16(b1, _b2y), _mm_mulhi_epi16(g1, _g2y));
-            g0 = _mm_add_epi16(g0, _mm_mulhi_epi16(r0, _r2y));
-            g1 = _mm_add_epi16(g1, _mm_mulhi_epi16(r1, _r2y));
-
-            g0 = _mm_srli_epi16(g0, 2);
-            g1 = _mm_srli_epi16(g1, 2);
-
-            g0 = _mm_packus_epi16(g0, g0);
-            g1 = _mm_packus_epi16(g1, g1);
-            g0 = _mm_unpacklo_epi8(g0, g1);
+            // interpolate horizontally
+            v_uint16x8 r1 = v_byte_shift_right<2>(v_rs0);
+            v_uint16x8 r0 = average2(v_rs0, r1);
+            r0 = v_interleave_pack(v_rs0, r0);
 
             _mm_storeu_si128((__m128i*)dst, g0);
         }

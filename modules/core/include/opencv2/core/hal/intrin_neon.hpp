@@ -725,6 +725,15 @@ OPENCV_HAL_IMPL_NEON_BIN_FUNC(v_float64x2, v_min, vminq_f64)
 OPENCV_HAL_IMPL_NEON_BIN_FUNC(v_float64x2, v_max, vmaxq_f64)
 #endif
 
+#define OPENCV_HAL_IMPL_NEON_FIEXEDPOINT_MULTIPLY(_Tpvec, cast, suffix, mul_suffix, offset) \
+inline _Tpvec v_mul_fixed_point(const _Tpvec& a, const _Tpvec& s) \
+{ \
+    return _Tpvec(vqdmulhq_n_##mul_suffix(a.val, cast(vmulq_##suffix(s.val, offset)))); \
+}
+
+OPENCV_HAL_IMPL_NEON_FIEXEDPOINT_MULTIPLY(v_int16x8, OPENCV_HAL_NOP, s16, s16, 2)
+OPENCV_HAL_IMPL_NEON_FIEXEDPOINT_MULTIPLY(v_uint16x8, vreinterpretq_s16_u16, u16, s16, 2)
+
 #if CV_SIMD128_64F
 inline int64x2_t vmvnq_s64(int64x2_t a)
 {
