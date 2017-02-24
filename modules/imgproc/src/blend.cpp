@@ -48,6 +48,161 @@
 #include "opencv2/core/hal/intrin.hpp"
 
 namespace cv {
+#undef CV_AVX
+#define CV_AVX 1
+#if CV_AVX
+#endif
+
+#if CV_AVX2
+int blendLinearAvx(const uchar* src1, const uchar* src2, const float* weights1, const float* weights2, uchar* dst, int x, int width, int cn);
+int blendLinearAvx(const uchar* src1, const uchar* src2, const float* weights1, const float* weights2, uchar* dst, int x, int width, int cn)
+{
+    // unimplemented
+    return 0;
+}
+#else
+int blendLinearAvx(const uchar* src1, const uchar* src2, const float* weights1, const float* weights2, uchar* dst, int x, int width, int cn);
+int blendLinearAvx(const uchar* src1, const uchar* src2, const float* weights1, const float* weights2, uchar* dst, int x, int width, int cn)
+{
+    return 0;
+}
+#endif
+
+#if CV_AVX
+// separate high and low 128 bit and cast to __m128i
+static inline void v_separate_lo_hi(const __m256& src, __m128i& lo, __m128i& hi)
+{
+    lo = _mm_castps_si128(_mm256_castps256_ps128(src));
+    hi = _mm_castps_si128(_mm256_extractf128_ps(src, 1));
+}
+// load four 8-packed float vector and deinterleave
+static inline void load_deinterleave(const float* ptr, __m256& a, __m256& b, __m256& c, __m256& d)
+{
+    __m256 s0 = _mm256_loadu_ps(ptr);
+    __m256 s1 = _mm256_loadu_ps(ptr + 8);
+    __m256 s2 = _mm256_loadu_ps(ptr + 16);
+    __m256 s3 = _mm256_loadu_ps(ptr + 24);
+
+    __m128i a0, a1, b0, b1, c0, c1, d0, d1;
+    v_separate_lo_hi(s0, a0, a1);
+    v_separate_lo_hi(s1, b0, b1);
+    v_separate_lo_hi(s2, c0, c1);
+    v_separate_lo_hi(s3, d0, d1);
+
+    v_uint32x4 u0, u1, u2, u3;
+    v_transpose4x4(v_uint32x4(a0), v_uint32x4(a1), v_uint32x4(b0), v_uint32x4(b1), u0, u1, u2, u3);
+    a = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1);
+    b = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1);
+    v_transpose4x4(v_uint32x4(c0), v_uint32x4(c1), v_uint32x4(d0), v_uint32x4(d1), u0, u1, u2, u3);
+    c = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1);
+    d = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1);
+}
+// interleave four 8-packed float vector and store
+static inline void store_interleave(float* ptr, const __m256& a, const __m256& b, const __m256& c, const __m256& d)
+{
+    __m128i a0, a1, b0, b1, c0, c1, d0, d1;
+    v_separate_lo_hi(a, a0, a1);
+    v_separate_lo_hi(b, b0, b1);
+    v_separate_lo_hi(c, c0, c1);
+    v_separate_lo_hi(d, d0, d1);
+
+    v_uint32x4 u0, u1, u2, u3;
+    v_transpose4x4(v_uint32x4(a0), v_uint32x4(a1), v_uint32x4(b0), v_uint32x4(b1), u0, u1, u2, u3);
+    _mm256_storeu_ps(ptr, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1));
+    _mm256_storeu_ps(ptr + 8, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1));
+    v_transpose4x4(v_uint32x4(c0), v_uint32x4(c1), v_uint32x4(d0), v_uint32x4(d1), u0, u1, u2, u3);
+    _mm256_storeu_ps(ptr + 16, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1));
+    _mm256_storeu_ps(ptr + 24, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1));
+}
+static inline __m256 blend(const __m256& v_src1, const __m256& v_src2, const __m256& v_w1, const __m256& v_w2)
+{
+    const __m256 v_eps = _mm256_set1_ps(1e-5f);
+    __m256 v_denom = _mm256_add_ps(_mm256_add_ps(v_w1, v_w2), v_eps);
+    __m256 v_dst = _mm256_mul_ps(v_src1, v_w1);
+    v_dst = _mm256_add_ps(v_dst, _mm256_mul_ps(v_src2, v_w2));
+    v_dst = _mm256_div_ps(v_dst, v_denom);
+    return v_dst;
+}
+static inline __m256 blend(const __m256& v_src1, const __m256& v_src2, const float* w_ptr1, const float* w_ptr2, int offset)
+{
+    __m256 v_w1 = _mm256_loadu_ps(w_ptr1 + offset);
+    __m256 v_w2 = _mm256_loadu_ps(w_ptr2 + offset);
+    return blend(v_src1, v_src2, v_w1, v_w2);
+}
+int blendLinearAvx(const float* src1, const float* src2, const float* weights1, const float* weights2, float* dst, int x, int width, int cn);
+int blendLinearAvx(const float* src1, const float* src2, const float* weights1, const float* weights2, float* dst, int x, int width, int cn)
+{
+    int step = 8 * cn;
+    switch(cn)
+    {
+    case 1:
+        for(int weight_offset = 0 ; x <= width - step; x += step, weight_offset += 8)
+        {
+            __m256 v_src1 = _mm256_loadu_ps(src1 + x);
+            __m256 v_src2 = _mm256_loadu_ps(src2 + x);
+            __m256 v_w1 = _mm256_loadu_ps(weights1 + weight_offset);
+            __m256 v_w2 = _mm256_loadu_ps(weights2 + weight_offset);
+
+            __m256 v_dst = blend(v_src1, v_src2, v_w1, v_w2);
+
+            _mm256_storeu_ps(dst + x, v_dst);
+        }
+        break;
+    //case 2:
+    //    for(int weight_offset = 0 ; x <= width - step; x += step, weight_offset += v_float32x4::nlanes)
+    //    {
+    //        v_float32x4 v_src10, v_src11, v_src20, v_src21;
+    //        v_load_deinterleave(src1 + x, v_src10, v_src11);
+    //        v_load_deinterleave(src2 + x, v_src20, v_src21);
+    //        v_float32x4 v_w1 = v_load(weights1 + weight_offset);
+    //        v_float32x4 v_w2 = v_load(weights2 + weight_offset);
+
+    //        v_float32x4 v_dst0 = blend(v_src10, v_src20, v_w1, v_w2);
+    //        v_float32x4 v_dst1 = blend(v_src11, v_src21, v_w1, v_w2);
+
+    //        v_store_interleave(dst + x, v_dst0, v_dst1);
+    //    }
+    //    break;
+    //case 3:
+    //    for(int weight_offset = 0 ; x <= width - step; x += step, weight_offset += v_float32x4::nlanes)
+    //    {
+    //        v_float32x4 v_src10, v_src11, v_src12, v_src20, v_src21, v_src22;
+    //        v_load_deinterleave(src1 + x, v_src10, v_src11, v_src12);
+    //        v_load_deinterleave(src2 + x, v_src20, v_src21, v_src22);
+    //        v_float32x4 v_w1 = v_load(weights1 + weight_offset);
+    //        v_float32x4 v_w2 = v_load(weights2 + weight_offset);
+
+    //        v_float32x4 v_dst0 = blend(v_src10, v_src20, v_w1, v_w2);
+    //        v_float32x4 v_dst1 = blend(v_src11, v_src21, v_w1, v_w2);
+    //        v_float32x4 v_dst2 = blend(v_src12, v_src22, v_w1, v_w2);
+
+    //        v_store_interleave(dst + x, v_dst0, v_dst1, v_dst2);
+    //    }
+    //    break;
+    case 4:
+        for(int weight_offset = 0 ; x <= width - step; x += step, weight_offset += 8)
+        {
+            __m256 v_src10, v_src11, v_src12, v_src13, v_src20, v_src21, v_src22, v_src23;
+            load_deinterleave(src1 + x, v_src10, v_src11, v_src12, v_src13);
+            load_deinterleave(src2 + x, v_src20, v_src21, v_src22, v_src23);
+            __m256 v_w1 = _mm256_loadu_ps(weights1 + weight_offset);
+            __m256 v_w2 = _mm256_loadu_ps(weights2 + weight_offset);
+
+            __m256 v_dst0 = blend(v_src10, v_src20, v_w1, v_w2);
+            __m256 v_dst1 = blend(v_src11, v_src21, v_w1, v_w2);
+            __m256 v_dst2 = blend(v_src12, v_src22, v_w1, v_w2);
+            __m256 v_dst3 = blend(v_src13, v_src23, v_w1, v_w2);
+
+            store_interleave(dst + x, v_dst0, v_dst1, v_dst2, v_dst3);
+        }
+        break;
+    default:
+        break;
+    }
+    return x;
+}
+#endif
+
 #if CV_SIMD128
 static inline v_float32x4 blend(const v_float32x4& v_src1, const v_float32x4& v_src2, const v_float32x4& v_w1, const v_float32x4& v_w2)
 {
@@ -323,6 +478,9 @@ public:
             int x = 0;
             #if CV_SIMD128
             x = blendLinearSimd128(src1_row, src2_row, weights1_row, weights2_row, dst_row, x, width, cn);
+            #endif
+            #if CV_AVX
+            x = blendLinearAvx(src1_row, src2_row, weights1_row, weights2_row, dst_row, x, width, cn);
             #endif
 
             for ( ; x < width; ++x)
