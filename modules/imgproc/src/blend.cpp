@@ -49,7 +49,7 @@
 
 namespace cv {
 #undef CV_AVX
-#define CV_AVX 1
+#define CV_AVX 0
 #if CV_AVX
 #endif
 
@@ -89,13 +89,13 @@ static inline void load_deinterleave(const float* ptr, __m256& a, __m256& b, __m
     v_separate_lo_hi(s2, c0, c1);
     v_separate_lo_hi(s3, d0, d1);
 
-    v_uint32x4 u0, u1, u2, u3;
+    v_uint32x4 u0, u1, u2, u3, u4, u5, u6, u7;
     v_transpose4x4(v_uint32x4(a0), v_uint32x4(a1), v_uint32x4(b0), v_uint32x4(b1), u0, u1, u2, u3);
-    a = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1);
-    b = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1);
-    v_transpose4x4(v_uint32x4(c0), v_uint32x4(c1), v_uint32x4(d0), v_uint32x4(d1), u0, u1, u2, u3);
-    c = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1);
-    d = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1);
+    v_transpose4x4(v_uint32x4(c0), v_uint32x4(c1), v_uint32x4(d0), v_uint32x4(d1), u4, u5, u6, u7);
+    a = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u4.val), 1);
+    b = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u1.val)), _mm_castsi128_ps(u5.val), 1);
+    c = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u6.val), 1);
+    d = _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u3.val)), _mm_castsi128_ps(u7.val), 1);
 }
 // interleave four 8-packed float vector and store
 static inline void store_interleave(float* ptr, const __m256& a, const __m256& b, const __m256& c, const __m256& d)
@@ -106,13 +106,13 @@ static inline void store_interleave(float* ptr, const __m256& a, const __m256& b
     v_separate_lo_hi(c, c0, c1);
     v_separate_lo_hi(d, d0, d1);
 
-    v_uint32x4 u0, u1, u2, u3;
-    v_transpose4x4(v_uint32x4(a0), v_uint32x4(a1), v_uint32x4(b0), v_uint32x4(b1), u0, u1, u2, u3);
+    v_uint32x4 u0, u1, u2, u3, u4, u5, u6, u7;
+    v_transpose4x4(v_uint32x4(a0), v_uint32x4(b0), v_uint32x4(c0), v_uint32x4(d0), u0, u1, u2, u3);
+    v_transpose4x4(v_uint32x4(a1), v_uint32x4(b1), v_uint32x4(c1), v_uint32x4(d1), u4, u5, u6, u7);
     _mm256_storeu_ps(ptr, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1));
     _mm256_storeu_ps(ptr + 8, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1));
-    v_transpose4x4(v_uint32x4(c0), v_uint32x4(c1), v_uint32x4(d0), v_uint32x4(d1), u0, u1, u2, u3);
-    _mm256_storeu_ps(ptr + 16, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u0.val)), _mm_castsi128_ps(u1.val), 1));
-    _mm256_storeu_ps(ptr + 24, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u2.val)), _mm_castsi128_ps(u3.val), 1));
+    _mm256_storeu_ps(ptr + 16, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u4.val)), _mm_castsi128_ps(u5.val), 1));
+    _mm256_storeu_ps(ptr + 24, _mm256_insertf128_ps(_mm256_castps128_ps256(_mm_castsi128_ps(u6.val)), _mm_castsi128_ps(u7.val), 1));
 }
 static inline __m256 blend(const __m256& v_src1, const __m256& v_src2, const __m256& v_w1, const __m256& v_w2)
 {

@@ -75,11 +75,6 @@ OCL_PERF_TEST_P(BlendLinearFixture, BlendLinear, ::testing::Combine(OCL_TEST_SIZ
     OCL_TEST_CYCLE() cv::blendLinear(src1, src2, weights1, weights2, dst);
 
     SANITY_CHECK(dst, eps);
-    if(CV_MAT_CN(srcType) == 4)
-    {
-        cv::imshow("debug", dst);
-        cv::waitKey(0);
-    }
 }
 
 } } // namespace opencv_test::ocl
