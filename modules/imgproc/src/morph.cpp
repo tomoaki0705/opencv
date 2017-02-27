@@ -98,7 +98,7 @@ struct MorphNoVec
     int operator()(uchar**, int, uchar*, int) const { return 0; }
 };
 
-#if CV_SSE2 && 0
+#if CV_SSE2
 
 template<class VecUpdate> struct MorphRowIVec
 {
@@ -605,12 +605,12 @@ template<class VecUpdate> struct MorphRowIVec
         width = (width & -4)*cn;
         VecUpdate updateOp;
 
-        for( i = 0; i <= width - 16; i += 16 )
+        for( i = 0; i <= width - v_uint8x16::nlanes; i += VecUpdate::nlanes )
         {
-            VecUpdate s = v_load((VecUpdate::lane_type*)(src + i));
+            VecUpdate s = v_load(src + i);
             for( k = cn; k < _ksize; k += cn )
             {
-                VecUpdate x = v_load((VecUpdate::lane_type*)(src + i + k));
+                v_uint8x16 x = v_load(src + i + k);
                 s = updateOp(s, x);
             }
             v_store((VecUpdate::lane_type*)(dst + i), s);
@@ -628,22 +628,22 @@ template<class VecUpdate> struct MorphRowFVec
     MorphRowFVec(int _ksize, int _anchor) : ksize(_ksize), anchor(_anchor) {}
     int operator()(const uchar* src, uchar* dst, int width, int cn) const
     {
-        if( !checkHardwareSupport(CV_CPU_SSE) )
+        if( !hasSIMD128() )
             return 0;
 
         int i, k, _ksize = ksize*cn;
         width = (width & -4)*cn;
         VecUpdate updateOp;
 
-        for( i = 0; i < width; i += 4 )
+        for( i = 0; i <= width - v_float32x4::nlanes; i += v_float32x4::nlanes )
         {
-            __m128 s = _mm_loadu_ps((const float*)src + i);
+            v_float32x4 s = v_load((const float*)src + i);
             for( k = cn; k < _ksize; k += cn )
             {
-                __m128 x = _mm_loadu_ps((const float*)src + i + k);
+                v_float32x4 x = v_load((const float*)src + i + k);
                 s = updateOp(s, x);
             }
-            _mm_storeu_ps((float*)dst + i, s);
+            v_store((float*)dst + i, s);
         }
 
         return i;
@@ -675,46 +675,30 @@ template<class VecUpdate> struct MorphColumnIVec
             for( i = 0; i <= width - 32; i += 32 )
             {
                 const uchar* sptr = src[1] + i;
-                __m128i s0 = _mm_load_si128((const __m128i*)sptr);
-                __m128i s1 = _mm_load_si128((const __m128i*)(sptr + 16));
-                __m128i x0, x1;
+                v_uint8x16 s0 = v_load(sptr);
+                v_uint8x16 s1 = v_load((sptr + 16));
+                v_uint8x16 x0, x1;
 
                 for( k = 2; k < _ksize; k++ )
                 {
                     sptr = src[k] + i;
-                    x0 = _mm_load_si128((const __m128i*)sptr);
-                    x1 = _mm_load_si128((const __m128i*)(sptr + 16));
+                    x0 = v_load(sptr);
+                    x1 = v_load(sptr + 16);
                     s0 = updateOp(s0, x0);
                     s1 = updateOp(s1, x1);
                 }
 
                 sptr = src[0] + i;
-                x0 = _mm_load_si128((const __m128i*)sptr);
-                x1 = _mm_load_si128((const __m128i*)(sptr + 16));
-                _mm_storeu_si128((__m128i*)(dst + i), updateOp(s0, x0));
-                _mm_storeu_si128((__m128i*)(dst + i + 16), updateOp(s1, x1));
+                x0 = v_load(sptr);
+                x1 = v_load(sptr + 16);
+                v_store(dst + i, updateOp(s0, x0));
+                v_store(dst + i + 16, updateOp(s1, x1));
 
                 sptr = src[k] + i;
-                x0 = _mm_load_si128((const __m128i*)sptr);
-                x1 = _mm_load_si128((const __m128i*)(sptr + 16));
-                _mm_storeu_si128((__m128i*)(dst + dststep + i), updateOp(s0, x0));
-                _mm_storeu_si128((__m128i*)(dst + dststep + i + 16), updateOp(s1, x1));
-            }
-
-            for( ; i <= width - 8; i += 8 )
-            {
-                __m128i s0 = _mm_loadl_epi64((const __m128i*)(src[1] + i)), x0;
-
-                for( k = 2; k < _ksize; k++ )
-                {
-                    x0 = _mm_loadl_epi64((const __m128i*)(src[k] + i));
-                    s0 = updateOp(s0, x0);
-                }
-
-                x0 = _mm_loadl_epi64((const __m128i*)(src[0] + i));
-                _mm_storel_epi64((__m128i*)(dst + i), updateOp(s0, x0));
-                x0 = _mm_loadl_epi64((const __m128i*)(src[k] + i));
-                _mm_storel_epi64((__m128i*)(dst + dststep + i), updateOp(s0, x0));
+                x0 = v_load(sptr);
+                x1 = v_load(sptr + 16);
+                v_store(dst + dststep + i, updateOp(s0, x0));
+                v_store(dst + dststep + i + 16, updateOp(s1, x1));
             }
         }
 
@@ -723,32 +707,20 @@ template<class VecUpdate> struct MorphColumnIVec
             for( i = 0; i <= width - 32; i += 32 )
             {
                 const uchar* sptr = src[0] + i;
-                __m128i s0 = _mm_load_si128((const __m128i*)sptr);
-                __m128i s1 = _mm_load_si128((const __m128i*)(sptr + 16));
-                __m128i x0, x1;
+                v_uint8x16 s0 = v_load(sptr);
+                v_uint8x16 s1 = v_load(sptr + 16);
+                v_uint8x16 x0, x1;
 
                 for( k = 1; k < _ksize; k++ )
                 {
                     sptr = src[k] + i;
-                    x0 = _mm_load_si128((const __m128i*)sptr);
-                    x1 = _mm_load_si128((const __m128i*)(sptr + 16));
+                    x0 = v_load(sptr);
+                    x1 = v_load(sptr + 16);
                     s0 = updateOp(s0, x0);
                     s1 = updateOp(s1, x1);
                 }
-                _mm_storeu_si128((__m128i*)(dst + i), s0);
-                _mm_storeu_si128((__m128i*)(dst + i + 16), s1);
-            }
-
-            for( ; i <= width - 8; i += 8 )
-            {
-                __m128i s0 = _mm_loadl_epi64((const __m128i*)(src[0] + i)), x0;
-
-                for( k = 1; k < _ksize; k++ )
-                {
-                    x0 = _mm_loadl_epi64((const __m128i*)(src[k] + i));
-                    s0 = updateOp(s0, x0);
-                }
-                _mm_storel_epi64((__m128i*)(dst + i), s0);
+                v_load(dst + i, s0);
+                v_load(dst + i + 16, s1);
             }
         }
 
@@ -764,7 +736,7 @@ template<class VecUpdate> struct MorphColumnFVec
     MorphColumnFVec(int _ksize, int _anchor) : ksize(_ksize), anchor(_anchor) {}
     int operator()(const uchar** _src, uchar* _dst, int dststep, int count, int width) const
     {
-        if( !checkHardwareSupport(CV_CPU_SSE) )
+        if( !hasSIMD128() )
             return 0;
 
         int i = 0, k, _ksize = ksize;
@@ -782,60 +754,60 @@ template<class VecUpdate> struct MorphColumnFVec
             for( i = 0; i <= width - 16; i += 16 )
             {
                 const float* sptr = src[1] + i;
-                __m128 s0 = _mm_load_ps(sptr);
-                __m128 s1 = _mm_load_ps(sptr + 4);
-                __m128 s2 = _mm_load_ps(sptr + 8);
-                __m128 s3 = _mm_load_ps(sptr + 12);
-                __m128 x0, x1, x2, x3;
+                v_float32x4 s0 = v_load(sptr);
+                v_float32x4 s1 = v_load(sptr + 4);
+                v_float32x4 s2 = v_load(sptr + 8);
+                v_float32x4 s3 = v_load(sptr + 12);
+                v_float32x4 x0, x1, x2, x3;
 
                 for( k = 2; k < _ksize; k++ )
                 {
                     sptr = src[k] + i;
-                    x0 = _mm_load_ps(sptr);
-                    x1 = _mm_load_ps(sptr + 4);
+                    x0 = v_load(sptr);
+                    x1 = v_load(sptr + 4);
                     s0 = updateOp(s0, x0);
                     s1 = updateOp(s1, x1);
-                    x2 = _mm_load_ps(sptr + 8);
-                    x3 = _mm_load_ps(sptr + 12);
+                    x2 = v_load(sptr + 8);
+                    x3 = v_load(sptr + 12);
                     s2 = updateOp(s2, x2);
                     s3 = updateOp(s3, x3);
                 }
 
                 sptr = src[0] + i;
-                x0 = _mm_load_ps(sptr);
-                x1 = _mm_load_ps(sptr + 4);
-                x2 = _mm_load_ps(sptr + 8);
-                x3 = _mm_load_ps(sptr + 12);
-                _mm_storeu_ps(dst + i, updateOp(s0, x0));
-                _mm_storeu_ps(dst + i + 4, updateOp(s1, x1));
-                _mm_storeu_ps(dst + i + 8, updateOp(s2, x2));
-                _mm_storeu_ps(dst + i + 12, updateOp(s3, x3));
+                x0 = v_load(sptr);
+                x1 = v_load(sptr + 4);
+                x2 = v_load(sptr + 8);
+                x3 = v_load(sptr + 12);
+                v_store(dst + i, updateOp(s0, x0));
+                v_store(dst + i + 4, updateOp(s1, x1));
+                v_store(dst + i + 8, updateOp(s2, x2));
+                v_store(dst + i + 12, updateOp(s3, x3));
 
                 sptr = src[k] + i;
-                x0 = _mm_load_ps(sptr);
-                x1 = _mm_load_ps(sptr + 4);
-                x2 = _mm_load_ps(sptr + 8);
-                x3 = _mm_load_ps(sptr + 12);
-                _mm_storeu_ps(dst + dststep + i, updateOp(s0, x0));
-                _mm_storeu_ps(dst + dststep + i + 4, updateOp(s1, x1));
-                _mm_storeu_ps(dst + dststep + i + 8, updateOp(s2, x2));
-                _mm_storeu_ps(dst + dststep + i + 12, updateOp(s3, x3));
+                x0 = v_load(sptr);
+                x1 = v_load(sptr + 4);
+                x2 = v_load(sptr + 8);
+                x3 = v_load(sptr + 12);
+                v_store(dst + dststep + i, updateOp(s0, x0));
+                v_store(dst + dststep + i + 4, updateOp(s1, x1));
+                v_store(dst + dststep + i + 8, updateOp(s2, x2));
+                v_store(dst + dststep + i + 12, updateOp(s3, x3));
             }
 
             for( ; i <= width - 4; i += 4 )
             {
-                __m128 s0 = _mm_load_ps(src[1] + i), x0;
+                v_float32x4 s0 = v_load(src[1] + i), x0;
 
                 for( k = 2; k < _ksize; k++ )
                 {
-                    x0 = _mm_load_ps(src[k] + i);
+                    x0 = v_load(src[k] + i);
                     s0 = updateOp(s0, x0);
                 }
 
-                x0 = _mm_load_ps(src[0] + i);
-                _mm_storeu_ps(dst + i, updateOp(s0, x0));
-                x0 = _mm_load_ps(src[k] + i);
-                _mm_storeu_ps(dst + dststep + i, updateOp(s0, x0));
+                x0 = v_load(src[0] + i);
+                v_store(dst + i, updateOp(s0, x0));
+                x0 = v_load(src[k] + i);
+                v_store(dst + dststep + i, updateOp(s0, x0));
             }
         }
 
@@ -844,39 +816,39 @@ template<class VecUpdate> struct MorphColumnFVec
             for( i = 0; i <= width - 16; i += 16 )
             {
                 const float* sptr = src[0] + i;
-                __m128 s0 = _mm_load_ps(sptr);
-                __m128 s1 = _mm_load_ps(sptr + 4);
-                __m128 s2 = _mm_load_ps(sptr + 8);
-                __m128 s3 = _mm_load_ps(sptr + 12);
-                __m128 x0, x1, x2, x3;
+                v_float32x4 s0 = v_load(sptr);
+                v_float32x4 s1 = v_load(sptr + 4);
+                v_float32x4 s2 = v_load(sptr + 8);
+                v_float32x4 s3 = v_load(sptr + 12);
+                v_float32x4 x0, x1, x2, x3;
 
                 for( k = 1; k < _ksize; k++ )
                 {
                     sptr = src[k] + i;
-                    x0 = _mm_load_ps(sptr);
-                    x1 = _mm_load_ps(sptr + 4);
+                    x0 = v_load(sptr);
+                    x1 = v_load(sptr + 4);
                     s0 = updateOp(s0, x0);
                     s1 = updateOp(s1, x1);
-                    x2 = _mm_load_ps(sptr + 8);
-                    x3 = _mm_load_ps(sptr + 12);
+                    x2 = v_load(sptr + 8);
+                    x3 = v_load(sptr + 12);
                     s2 = updateOp(s2, x2);
                     s3 = updateOp(s3, x3);
                 }
-                _mm_storeu_ps(dst + i, s0);
-                _mm_storeu_ps(dst + i + 4, s1);
-                _mm_storeu_ps(dst + i + 8, s2);
-                _mm_storeu_ps(dst + i + 12, s3);
+                v_store(dst + i, s0);
+                v_store(dst + i + 4, s1);
+                v_store(dst + i + 8, s2);
+                v_store(dst + i + 12, s3);
             }
 
             for( i = 0; i <= width - 4; i += 4 )
             {
-                __m128 s0 = _mm_load_ps(src[0] + i), x0;
+                v_float32x4 s0 = v_load(src[0] + i), x0;
                 for( k = 1; k < _ksize; k++ )
                 {
-                    x0 = _mm_load_ps(src[k] + i);
+                    x0 = v_load(src[k] + i);
                     s0 = updateOp(s0, x0);
                 }
-                _mm_storeu_ps(dst + i, s0);
+                v_store(dst + i, s0);
             }
         }
 
