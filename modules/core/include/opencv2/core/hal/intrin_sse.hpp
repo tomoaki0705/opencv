@@ -1313,6 +1313,25 @@ inline _Tpvec v_rotate_left(const _Tpvec &a, const _Tpvec &b)
             v_sse_reinterpret_as<__m128i>(a.val))));
 }
 
+#define OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(_Tpvec) \
+template<int imm> \
+inline _Tpvec v_byte_shift_left(const _Tpvec& a) \
+{ \
+    return _Tpvec(_mm_slli_si128(a.val, imm)); \
+} \
+template<int imm> \
+inline _Tpvec v_byte_shift_right(const _Tpvec& a) \
+{ \
+    return _Tpvec(_mm_srli_si128(a.val, imm)); \
+}
+
+OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(v_uint8x16)
+OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(v_int8x16)
+OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(v_uint16x8)
+OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(v_int16x8)
+OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(v_uint32x4)
+OPENCV_HAL_IMPL_SSE_BYTE_SHIFT(v_int32x4)
+
 #define OPENCV_HAL_IMPL_SSE_LOADSTORE_INT_OP(_Tpvec, _Tp) \
 inline _Tpvec v_load(const _Tp* ptr) \
 { return _Tpvec(_mm_loadu_si128((const __m128i*)ptr)); } \

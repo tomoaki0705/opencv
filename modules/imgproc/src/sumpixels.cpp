@@ -45,7 +45,6 @@
 #include "opencl_kernels_imgproc.hpp"
 #include "opencv2/core/hal/intrin.hpp"
 
-
 namespace cv
 {
 
@@ -198,7 +197,86 @@ struct Integral_SIMD<uchar, float, double>
         return true;
     }
 };
+#elif CV_SIMD128_64F
 
+template <>
+struct Integral_SIMD<uchar, int, double>
+{
+    Integral_SIMD()
+    {
+        haveSimd = hasSIMD128();
+    }
+
+    bool operator()(const uchar * src, size_t _srcstep,
+                    int * sum, size_t _sumstep,
+                    double * sqsum, size_t,
+                    int * tilted, size_t,
+                    int width, int height, int cn) const
+    {
+        if (sqsum || tilted || cn != 1 || !haveSimd)
+            return false;
+
+        // the first iteration
+        memset(sum, 0, (width + 1) * sizeof(int));
+
+        v_int32x4 v_zero = v_setzero_s32(), prev = v_zero;
+        int j = 0;
+
+        // the others
+        for (int i = 0; i < height; ++i)
+        {
+            const uchar * src_row = src + _srcstep * i;
+            int * prev_sum_row = (int *)((uchar *)sum + _sumstep * i) + 1;
+            int * sum_row = (int *)((uchar *)sum + _sumstep * (i + 1)) + 1;
+
+            sum_row[-1] = 0;
+
+            prev = v_zero;
+            j = 0;
+
+            for ( ; j + 7 < width; j += 8)
+            {
+                v_int32x4 vsuml = v_load(prev_sum_row + j);
+                v_int32x4 vsumh = v_load(prev_sum_row + j + 4);
+
+                v_uint8x16 el16shl0 = v_load(src_row + j);            // 0 1 2 3 4 5..
+                v_uint8x16 el16shl1 = v_byte_shift_left<1>(el16shl0); // 1 2 3 4 5 6..
+                v_uint8x16 el16shl2 = v_byte_shift_left<2>(el16shl0); // 2 3 4 5 6 7..
+                v_uint8x16 el16shl3 = v_byte_shift_left<3>(el16shl0); // 3 4 5 6 7 8..
+
+                vsuml += prev;
+                vsumh += prev;
+
+                v_uint16x8 el8shl0, el8shl1, el8shl2, el8shl3, dummy;
+                v_expand(el16shl0, el8shl0, dummy); // 0 1 2 3 4 5 6 7
+                v_expand(el16shl1, el8shl1, dummy); // 1 2 3 4 5 6 7 8
+                v_expand(el16shl2, el8shl2, dummy); // 2 3 4 5 6 7 8 9
+                v_expand(el16shl3, el8shl3, dummy); // 3 4 5 6 7 8 9 10
+
+                v_uint16x8 el8 = el8shl1 + el8shl2 + el8shl0 + el8shl3;
+
+                v_int32x4 el4l, el4h;
+                v_expand(v_reinterpret_as_s16(el8), el4l, el4h);
+
+                el4h += el4l;
+                vsuml += el4l;
+                vsumh += el4h;
+
+                v_store(sum_row + j, vsuml);
+                v_store(sum_row + j + 4, vsumh);
+
+                prev += v_setall_s32(v_byte_shift_left<12>(el4h).get0());
+            }
+
+            for (int v = sum_row[j - 1] - prev_sum_row[j - 1]; j < width; ++j)
+                sum_row[j] = (v += src_row[j]) + prev_sum_row[j];
+        }
+
+        return true;
+    }
+
+    bool haveSimd;
+};
 #endif
 
 template<typename T, typename ST, typename QT>
