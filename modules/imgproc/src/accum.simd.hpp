@@ -9,21 +9,37 @@ void acc_##suffix(const type* src, acctype* dst, \
                          const uchar* mask, int len, int cn) \
 { \
     CV_CPU_DISPATCH(acc_simd_, (src, dst, mask, len, cn),  CV_CPU_DISPATCH_MODES_ALL); \
+    CV_CPU_CALL_AVX2(acc_avx2_##suffix, (src, dst, mask, len, cn)); \
+    CV_CPU_CALL_NEON(acc_simd_, (src, dst, mask, len, cn)); \
+    CV_CPU_CALL_SSE2(acc_simd_, (src, dst, mask, len, cn)); \
+    CV_CPU_CALL_BASELINE(acc_general_, (src, dst, mask, len, cn)); \
 } \
 void accSqr_##suffix(const type* src, acctype* dst, \
                             const uchar* mask, int len, int cn) \
 { \
     CV_CPU_DISPATCH(accSqr_simd_, (src, dst, mask, len, cn),  CV_CPU_DISPATCH_MODES_ALL); \
+    CV_CPU_CALL_AVX2(acc_avx2_##suffix, (src, dst, mask, len, cn)); \
+    CV_CPU_CALL_NEON(accSqr_simd_, (src, dst, mask, len, cn)); \
+    CV_CPU_CALL_SSE2(accSqr_simd_, (src, dst, mask, len, cn)); \
+    CV_CPU_CALL_BASELINE(accSqr_general_, (src, dst, mask, len, cn)); \
 } \
 void accProd_##suffix(const type* src1, const type* src2, \
                              acctype* dst, const uchar* mask, int len, int cn) \
 { \
     CV_CPU_DISPATCH(accProd_simd_, (src1, src2, dst, mask, len, cn),  CV_CPU_DISPATCH_MODES_ALL); \
+    CV_CPU_CALL_AVX2(acc_avx2_##suffix, (src1, src2, dst, mask, len, cn)); \
+    CV_CPU_CALL_NEON(accProd_simd_, (src1, src2, dst, mask, len, cn)); \
+    CV_CPU_CALL_SSE2(accProd_simd_, (src1, src2, dst, mask, len, cn)); \
+    CV_CPU_CALL_BASELINE(accProd_general_, (src1, src2, dst, mask, len, cn)); \
 } \
 void accW_##suffix(const type* src, acctype* dst, \
                           const uchar* mask, int len, int cn, double alpha) \
 { \
     CV_CPU_DISPATCH(accW_simd_, (src, dst, mask, len, cn, alpha),  CV_CPU_DISPATCH_MODES_ALL); \
+    CV_CPU_CALL_AVX2(acc_avx2_##suffix, (src, dst, mask, len, cn, alpha)); \
+    CV_CPU_CALL_NEON(accW_simd_, (src, dst, mask, len, cn, alpha)); \
+    CV_CPU_CALL_SSE2(accW_simd_, (src, dst, mask, len, cn, alpha)); \
+    CV_CPU_CALL_BASELINE(accW_general_, (src, dst, mask, len, cn, alpha)); \
 }
 #define DEF_ACC_FLT_FUNCS(suffix, type, acctype) \
 void acc_##suffix(const type* src, acctype* dst, \
@@ -93,6 +109,38 @@ void accW_simd_(const ushort* src, double* dst, const uchar* mask, int len, int 
 void accW_simd_(const float* src, float* dst, const uchar* mask, int len, int cn, double alpha);
 void accW_simd_(const float* src, double* dst, const uchar* mask, int len, int cn, double alpha);
 void accW_simd_(const double* src, double* dst, const uchar* mask, int len, int cn, double alpha);
+
+// accumulate series optimized by AVX
+void acc_avx_32f(const float* src, float* dst, const uchar* mask, int len, int cn);
+void acc_avx_32f64f(const float* src, double* dst, const uchar* mask, int len, int cn);
+void acc_avx_64f(const double* src, double* dst, const uchar* mask, int len, int cn);
+void accSqr_avx_32f(const float* src, float* dst, const uchar* mask, int len, int cn);
+void accSqr_avx_32f64f(const float* src, double* dst, const uchar* mask, int len, int cn);
+void accSqr_avx_64f(const double* src, double* dst, const uchar* mask, int len, int cn);
+void accProd_avx_32f(const float* src1, const float* src2, float* dst, const uchar* mask, int len, int cn);
+void accProd_avx_32f64f(const float* src1, const float* src2, double* dst, const uchar* mask, int len, int cn);
+void accProd_avx_64f(const double* src1, const double* src2, double* dst, const uchar* mask, int len, int cn);
+void accW_avx_32f(const float* src, float* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx_32f64f(const float* src, double* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx_64f(const double* src, double* dst, const uchar* mask, int len, int cn, double alpha);
+
+// accumulate series optimized by AVX2
+void acc_avx2_8u32f(const uchar* src, float* dst, const uchar* mask, int len, int cn);
+void acc_avx2_8u64f(const uchar* src, double* dst, const uchar* mask, int len, int cn);
+void acc_avx2_16u32f(const ushort* src, float* dst, const uchar* mask, int len, int cn);
+void acc_avx2_16u64f(const ushort* src, double* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_8u32f(const uchar* src, float* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_8u64f(const uchar* src, double* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_16u32f(const ushort* src, float* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_16u64f(const ushort* src, double* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_8u32f(const uchar* src1, const float* src2, float* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_8u64f(const uchar* src1, const float* src2, double* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_16u32f(const ushort* src1, const float* src2, float* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_16u64f(const ushort* src1, const float* src2, double* dst, const uchar* mask, int len, int cn);
+void accW_avx2_8u32f(const uchar* src, float* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx2_8u64f(const uchar* src, double* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx2_16u32f(const ushort* src, float* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx2_16u64f(const ushort* src, double* dst, const uchar* mask, int len, int cn, double alpha);
 
 #ifndef CV_CPU_OPTIMIZATION_DECLARATIONS_ONLY
 // todo: remove AVX branch after support it by universal intrinsics
@@ -2912,6 +2960,60 @@ void accW_simd_(const double* src, double* dst, const uchar* mask, int len, int 
     accW_general_(src, dst, mask, len, cn, alpha, x);
 }
 
+#if CV_AVX2
+// accumulate series optimized by AVX2
+void acc_avx2_8u32f(const uchar* src, float* dst, const uchar* mask, int len, int cn)
+{
+    int x = 0;
+    const int cVectorWidth = 32;
+
+    if (!mask)
+    {
+        int size = len * cn;
+        for (; x <= size - cVectorWidth; x += cVectorWidth)
+        {
+            v_uint8x16 v_src  = v_load(src + x);
+            v_uint16x8 v_src0, v_src1;
+            v_expand(v_src, v_src0, v_src1);
+
+            v_uint32x4 v_src00, v_src01, v_src10, v_src11;
+            v_expand(v_src0, v_src00, v_src01);
+            v_expand(v_src1, v_src10, v_src11);
+
+            v_store(dst + x, v_load(dst + x) + v_cvt_f32(v_reinterpret_as_s32(v_src00)));
+            v_store(dst + x + 4, v_load(dst + x + 4) + v_cvt_f32(v_reinterpret_as_s32(v_src01)));
+            v_store(dst + x + 8, v_load(dst + x + 8) + v_cvt_f32(v_reinterpret_as_s32(v_src10)));
+            v_store(dst + x + 12, v_load(dst + x + 12) + v_cvt_f32(v_reinterpret_as_s32(v_src11)));
+        }
+    }
+    else
+    {
+        if (cn == 1)
+        {
+        }
+        else if (cn == 3)
+        {
+        }
+    }
+}
+
+void acc_avx2_8u64f(const uchar* src, double* dst, const uchar* mask, int len, int cn);
+void acc_avx2_16u32f(const ushort* src, float* dst, const uchar* mask, int len, int cn);
+void acc_avx2_16u64f(const ushort* src, double* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_8u32f(const uchar* src, float* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_8u64f(const uchar* src, double* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_16u32f(const ushort* src, float* dst, const uchar* mask, int len, int cn);
+void accSqr_avx2_16u64f(const ushort* src, double* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_8u32f(const uchar* src1, const float* src2, float* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_8u64f(const uchar* src1, const float* src2, double* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_16u32f(const ushort* src1, const float* src2, float* dst, const uchar* mask, int len, int cn);
+void accProd_avx2_16u64f(const ushort* src1, const float* src2, double* dst, const uchar* mask, int len, int cn);
+void accW_avx2_8u32f(const uchar* src, float* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx2_8u64f(const uchar* src, double* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx2_16u32f(const ushort* src, float* dst, const uchar* mask, int len, int cn, double alpha);
+void accW_avx2_16u64f(const ushort* src, double* dst, const uchar* mask, int len, int cn, double alpha);
+#endif // CV_AVX2
+#endif // CV_AVX
 #endif // CV_CPU_OPTIMIZATION_DECLARATIONS_ONLY
 
 CV_CPU_OPTIMIZATION_NAMESPACE_END
