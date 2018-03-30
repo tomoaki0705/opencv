@@ -44,7 +44,7 @@
 
 #ifdef HAVE_CUDA
 
-OutputLevel nvidiaTestOutputLevel = OutputLevelNone;
+OutputLevel nvidiaTestOutputLevel = OutputLevelFull;
 
 namespace opencv_test { namespace {
 
@@ -69,7 +69,7 @@ struct NCV : NVidiaTest {};
 
 CUDA_TEST_P(NPPST, Integral)
 {
-    bool res = nvidia_NPPST_Integral_Image(_path, nvidiaTestOutputLevel);
+    bool res = nvidia_NPPST_Integral_Image(_path, OutputLevelFull);
 
     ASSERT_TRUE(res);
 }
