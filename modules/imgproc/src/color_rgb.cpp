@@ -301,23 +301,6 @@ template<> struct RGB2RGB<uchar>
 
 /////////// Transforming 16-bit (565 or 555) RGB to/from 24/32-bit (888[8]) RGB //////////
 
-//#if CV_SIMD128
-//#define v_swap_and_store_3_3(pdst, v_r, v_g, v_b, bidx) \
-//            v_uint8x16 v_dst[3];    \
-//            v_dst[bidx] = v_b;      \
-//            v_dst[1] = v_g;         \
-//            v_dst[bidx ^ 2] = v_r;  \
-//            v_store_interleave((pdst), v_dst[0], v_dst[1], v_dst[2]);
-//#define v_swap_and_store_3_4(pdst, v_r, v_g, v_b, bidx, v_alpha) \
-//            v_uint8x16 v_dst[4];    \
-//            v_dst[bidx] = v_b;      \
-//            v_dst[1] = v_g;         \
-//            v_dst[bidx ^ 2] = v_r;  \
-//            v_dst[3] = v_alpha;     \
-//            v_store_interleave((pdst), v_dst[0], v_dst[1], v_dst[2], v_dst[3]);
-//#endif
-#define CV_RGB5X52RGB_FLAG 0
-
 struct RGB5x52RGB
 {
     typedef uchar channel_type;
@@ -325,7 +308,7 @@ struct RGB5x52RGB
     RGB5x52RGB(int _dstcn, int _blueIdx, int _greenBits)
         : dstcn(_dstcn), blueIdx(_blueIdx), greenBits(_greenBits)
     {
-        #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
+        #if CV_SIMD128
         v_n3 = v_setall_u16((uchar)~3);
         v_n7 = v_setall_u16((uchar)~7);
         v_255 = v_setall_u8(255);
@@ -340,7 +323,7 @@ struct RGB5x52RGB
         #endif
     }
 
-    #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
+    #if CV_SIMD128
     static inline void v_swap_and_store_3_3(uchar* dst, const v_uint8x16& v_r, const v_uint8x16& v_g, const v_uint8x16& v_b, int bidx)
     {
         v_uint8x16 v_dst[3];
@@ -377,7 +360,7 @@ struct RGB5x52RGB
         int dcn = dstcn, bidx = blueIdx, i = 0;
         if( greenBits == 6 )
         {
-            #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
+            #if CV_SIMD128
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, dst += dcn * 16)
@@ -435,7 +418,7 @@ struct RGB5x52RGB
         }
         else
         {
-            #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
+            #if CV_SIMD128
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, dst += dcn * 16)
@@ -496,7 +479,7 @@ struct RGB5x52RGB
     }
 
     int dstcn, blueIdx, greenBits;
-    #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
+    #if CV_SIMD128
     v_uint16x8 v_n3, v_n7, v_mask;
     v_uint8x16 v_255, v_0;
     #elif CV_NEON
