@@ -1166,21 +1166,21 @@ OPENCV_HAL_IMPL_SSE_SHIFT_OP(v_uint16x8, v_int16x8, epi16, _mm_srai_epi16)
 OPENCV_HAL_IMPL_SSE_SHIFT_OP(v_uint32x4, v_int32x4, epi32, _mm_srai_epi32)
 OPENCV_HAL_IMPL_SSE_SHIFT_OP(v_uint64x2, v_int64x2, epi64, v_srai_epi64)
 
-#define OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(_Tpvec, _Tpwvec, func) \
-template <int imm> \
-inline _Tpvec func(const _Tpvec& a) \
-{ \
-    _Tpwvec v0, v1; \
-    v_expand(a, v0, v1); \
-    v0 = func<imm>(v0); \
-    v1 = func<imm>(v1); \
-    return v_pack(v0, v1); \
-}
-
-OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_uint8x16, v_uint16x8, v_shl)
-OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_uint8x16, v_uint16x8, v_shr)
-OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_int8x16, v_int16x8, v_shl)
-OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_int8x16, v_int16x8, v_shr)
+//#define OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(_Tpvec, _Tpwvec, func) \
+//template <int imm> \
+//inline _Tpvec func(const _Tpvec& a) \
+//{ \
+//    _Tpwvec v0, v1; \
+//    v_expand(a, v0, v1); \
+//    v0 = func<imm>(v0); \
+//    v1 = func<imm>(v1); \
+//    return v_pack(v0, v1); \
+//}
+//
+//OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_uint8x16, v_uint16x8, v_shl)
+//OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_uint8x16, v_uint16x8, v_shr)
+//OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_int8x16, v_int16x8, v_shl)
+//OPENCV_HAL_IMPL_SSE_SHIFT_OP_8(v_int8x16, v_int16x8, v_shr)
 
 namespace hal_sse_internal
 {

@@ -125,7 +125,7 @@ template<> struct RGB2RGB<uchar>
                 for (; i <= n - 48; i += 48, dst += 64)
                 {
                     v_uint8x16 v_src[3], v_dst[4];
-                    v_load_deinterleave(src, v_src[0], v_src[1], v_src[2]);
+                    v_load_deinterleave(src + i, v_src[0], v_src[1], v_src[2]);
                     v_swap_and_store_3_4(dst, v_src, v_dst, bidx, v_alpha);
                 }
             }
@@ -144,8 +144,8 @@ template<> struct RGB2RGB<uchar>
                 for (; i <= n - 64; i += 64)
                 {
                     v_uint8x16 v_src[4], v_dst[4];
-                    v_load_deinterleave(src, v_src[0], v_src[1], v_src[2], v_src[3]);
-                    v_swap_and_store_3_4(dst, v_src, v_dst, bidx, v_src[3]);
+                    v_load_deinterleave(src + i, v_src[0], v_src[1], v_src[2], v_src[3]);
+                    v_swap_and_store_3_4(dst + i, v_src, v_dst, bidx, v_src[3]);
                 }
             }
             for (; i < n; i += 4)
@@ -316,6 +316,8 @@ template<> struct RGB2RGB<uchar>
 //            v_dst[3] = v_alpha;     \
 //            v_store_interleave((pdst), v_dst[0], v_dst[1], v_dst[2], v_dst[3]);
 //#endif
+#define CV_RGB5X52RGB_FLAG 0
+
 struct RGB5x52RGB
 {
     typedef uchar channel_type;
@@ -323,9 +325,9 @@ struct RGB5x52RGB
     RGB5x52RGB(int _dstcn, int _blueIdx, int _greenBits)
         : dstcn(_dstcn), blueIdx(_blueIdx), greenBits(_greenBits)
     {
-        #if CV_SIMD128 && 0
-        v_n3 = v_setall_u16((ushort)~3);
-        v_n7 = v_setall_u16((ushort)~7);
+        #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
+        v_n3 = v_setall_u16((uchar)~3);
+        v_n7 = v_setall_u16((uchar)~7);
         v_255 = v_setall_u8(255);
         v_0 = v_setall_u8(0);
         v_mask = v_setall_u16(0x8000);
@@ -338,6 +340,7 @@ struct RGB5x52RGB
         #endif
     }
 
+    #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
     static inline void v_swap_and_store_3_3(uchar* dst, const v_uint8x16& v_r, const v_uint8x16& v_g, const v_uint8x16& v_b, int bidx)
     {
         v_uint8x16 v_dst[3];
@@ -357,22 +360,24 @@ struct RGB5x52RGB
         v_store_interleave(dst, v_dst[0], v_dst[1], v_dst[2], v_dst[3]);
     }
 
-    template<int N1, int N2> static inline void v_load_and_pack(const ushort* src, v_uint8x16& v_r, v_uint8x16& v_g, v_uint8x16& v_b, v_uint16x8& src0, v_uint16x8& src1, const v_uint16x8& v_mask0, const v_uint16x8& v_mask1)
+    template<int immg, int immr> static inline void v_load_and_pack(const ushort* src, v_uint8x16& v_r, v_uint8x16& v_g, v_uint8x16& v_b, v_uint16x8& src0, v_uint16x8& src1, const v_uint16x8& v_mask0, const v_uint16x8& v_mask1)
     {
         src0 = v_load(src), src1 = v_load(src + 8);
-        v_b = v_pack(v_shl<3>(src0), v_shl<3>(src1));
-        v_g = v_pack(v_shr<N1>(src0) & v_mask0,
-                     v_shr<N1>(src1) & v_mask0);
-        v_r = v_pack(v_shr<N2>(src0) & v_mask1,
-                     v_shr<N2>(src1) & v_mask1);
+        v_b = v_pack(v_shl<3>   (src0) & v_mask1, 
+                     v_shl<3>   (src1) & v_mask1);
+        v_g = v_pack(v_shr<immg>(src0) & v_mask0,
+                     v_shr<immg>(src1) & v_mask0);
+        v_r = v_pack(v_shr<immr>(src0) & v_mask1,
+                     v_shr<immr>(src1) & v_mask1);
     }
+    #endif
 
     void operator()(const uchar* src, uchar* dst, int n) const
     {
         int dcn = dstcn, bidx = blueIdx, i = 0;
         if( greenBits == 6 )
         {
-            #if CV_SIMD128 && 0
+            #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, dst += dcn * 16)
@@ -430,7 +435,7 @@ struct RGB5x52RGB
         }
         else
         {
-            #if CV_SIMD128 && 0
+            #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, dst += dcn * 16)
@@ -481,10 +486,6 @@ struct RGB5x52RGB
             for( ; i < n; i++, dst += dcn )
             {
                 unsigned t = ((const ushort*)src)[i];
-                if (t == 0x6e5c)
-                {
-                    int hoge = 9;
-                }
                 dst[bidx] = (uchar)(t << 3);
                 dst[1] = (uchar)((t >> 2) & ~7);
                 dst[bidx ^ 2] = (uchar)((t >> 7) & ~7);
@@ -495,7 +496,7 @@ struct RGB5x52RGB
     }
 
     int dstcn, blueIdx, greenBits;
-    #if CV_SIMD128 && 0
+    #if CV_SIMD128 && CV_RGB5X52RGB_FLAG
     v_uint16x8 v_n3, v_n7, v_mask;
     v_uint8x16 v_255, v_0;
     #elif CV_NEON
@@ -504,6 +505,7 @@ struct RGB5x52RGB
     #endif
 };
 
+#define CV_RGB2RGB5X5_FLAG 0
 
 struct RGB2RGB5x5
 {
@@ -512,7 +514,7 @@ struct RGB2RGB5x5
     RGB2RGB5x5(int _srccn, int _blueIdx, int _greenBits)
         : srccn(_srccn), blueIdx(_blueIdx), greenBits(_greenBits)
     {
-        #if CV_SIMD128
+        #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
         v_n3 = v_setall_u8((uchar)~3);
         v_n7 = v_setall_u8((uchar)~7);
         v_mask = v_setall_u16(0x8000);
@@ -527,6 +529,7 @@ struct RGB2RGB5x5
         #endif
     }
 
+    #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
     template <int N1, int N2> static inline void v_swap_and_store(ushort* dst, v_uint8x16 *v_src, int bidx, const v_uint8x16& v_mask1, const v_uint8x16& v_mask2)
     {
         v_src[bidx] = v_shr<3>(v_src[bidx]);
@@ -547,6 +550,7 @@ struct RGB2RGB5x5
         v_store(dst, v_dst_l);
         v_store(dst + 8, v_dst_h);
     }
+    #endif
 
     void operator()(const uchar* src, uchar* dst, int n) const
     {
@@ -555,7 +559,7 @@ struct RGB2RGB5x5
         {
             if (scn == 3)
             {
-                #if CV_SIMD128
+                #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
                 if (hasSIMD128())
                 {
                     for (; i <= n - 16; i += 16, src += 48)
@@ -580,7 +584,7 @@ struct RGB2RGB5x5
             }
             else
             {
-                #if CV_SIMD128
+                #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
                 if (hasSIMD128())
                 {
                     for (; i <= n - 16; i += 16, src += 64)
@@ -607,7 +611,7 @@ struct RGB2RGB5x5
         }
         else if (scn == 3)
         {
-            #if CV_SIMD128
+            #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, src += 48)
@@ -632,7 +636,7 @@ struct RGB2RGB5x5
         }
         else
         {
-            #if CV_SIMD128
+            #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, src += 48)
@@ -660,7 +664,7 @@ struct RGB2RGB5x5
     }
 
     int srccn, blueIdx, greenBits;
-    #if CV_SIMD128
+    #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
     v_uint8x16 v_n3, v_n7;
     v_uint16x8 v_mask, v_0, v_full;
     #elif CV_NEON
