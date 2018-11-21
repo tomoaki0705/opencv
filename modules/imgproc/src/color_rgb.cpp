@@ -512,7 +512,7 @@ struct RGB2RGB5x5
         #endif
     }
 
-    #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+    #if CV_SIMD128
     template <int N1, int N2> static inline void v_swap_and_store(ushort* dst, v_uint8x16 *v_src, int bidx, const v_uint8x16& v_mask1, const v_uint8x16& v_mask2)
     {
         v_src[bidx] = v_shr<3>(v_src[bidx]);
@@ -542,7 +542,7 @@ struct RGB2RGB5x5
         {
             if (scn == 3)
             {
-                #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+                #if CV_SIMD128
                 if (hasSIMD128())
                 {
                     for (; i <= n - 16; i += 16, src += 48)
@@ -567,12 +567,11 @@ struct RGB2RGB5x5
             }
             else
             {
-                #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+                #if CV_SIMD128
                 if (hasSIMD128())
                 {
                     for (; i <= n - 16; i += 16, src += 64)
                     {
-
                         v_uint8x16 v_src[4];
                         v_load_deinterleave(src, v_src[0], v_src[1], v_src[2], v_src[3]);
                         v_swap_and_store<3, 8>((ushort*)dst + i, v_src, bidx, v_n3, v_n7);
@@ -594,14 +593,14 @@ struct RGB2RGB5x5
         }
         else if (scn == 3)
         {
-            #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+            #if CV_SIMD128
             if (hasSIMD128())
             {
                 for (; i <= n - 16; i += 16, src += 48)
                 {
                     v_uint8x16 v_src[3];
                     v_load_deinterleave(src, v_src[0], v_src[1], v_src[2]);
-                    v_swap_and_store<2, 7>((ushort*)dst + i, v_src, bidx, v_n3, v_n7);
+                    v_swap_and_store<2, 7>((ushort*)dst + i, v_src, bidx, v_n7, v_n7);
                 }
             }
             #elif CV_NEON
@@ -619,14 +618,34 @@ struct RGB2RGB5x5
         }
         else
         {
-            #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+            #if CV_SIMD128
             if (hasSIMD128())
             {
-                for (; i <= n - 16; i += 16, src += 48)
+                for (; i <= n - 16; i += 16, src += 64)
                 {
                     v_uint8x16 v_src[4];
                     v_load_deinterleave(src, v_src[0], v_src[1], v_src[2], v_src[3]);
-                    v_swap_and_store<2, 7>((ushort*)dst + i, v_src, bidx, v_n3, v_n7);
+                    v_src[bidx] = v_shr<3>(v_src[bidx]);
+                    v_src[1] = v_src[1] & v_n7;
+                    v_src[bidx ^ 2] = v_src[bidx ^ 2] & v_n7;
+
+                    v_uint16x8 v_src_h[4], v_src_l[4], v_alphaMask_l, v_alphaMask_h;
+                    v_expand(v_src[0], v_src_l[0], v_src_h[0]);
+                    v_expand(v_src[1], v_src_l[1], v_src_h[1]);
+                    v_expand(v_src[2], v_src_l[2], v_src_h[2]);
+                    v_expand(v_src[3], v_src_l[3], v_src_h[3]);
+                    v_alphaMask_l = (v_src_l[3] != v_0) & v_mask;
+                    v_alphaMask_h = (v_src_h[3] != v_0) & v_mask;
+
+                    v_src_l[1] = v_shl<2>(v_src_l[1]);
+                    v_src_h[1] = v_shl<2>(v_src_h[1]);
+                    v_src_l[bidx ^ 2] = v_shl<7>(v_src_l[bidx ^ 2]);
+                    v_src_h[bidx ^ 2] = v_shl<7>(v_src_h[bidx ^ 2]);
+                    v_uint16x8 v_dst_l = v_src_l[0] | v_src_l[1] | v_src_l[2] | v_alphaMask_l;
+                    v_uint16x8 v_dst_h = v_src_h[0] | v_src_h[1] | v_src_h[2] | v_alphaMask_h;
+                    v_store((ushort*)dst + i, v_dst_l);
+                    v_store((ushort*)dst + i + 8, v_dst_h);
+                    //v_swap_and_store<2, 7>((ushort*)dst + i, v_src, bidx, v_n7, v_n7);
                 }
             }
             #elif CV_NEON
