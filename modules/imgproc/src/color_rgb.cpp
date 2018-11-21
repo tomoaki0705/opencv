@@ -497,7 +497,7 @@ struct RGB2RGB5x5
     RGB2RGB5x5(int _srccn, int _blueIdx, int _greenBits)
         : srccn(_srccn), blueIdx(_blueIdx), greenBits(_greenBits)
     {
-        #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+        #if CV_SIMD128
         v_n3 = v_setall_u8((uchar)~3);
         v_n7 = v_setall_u8((uchar)~7);
         v_mask = v_setall_u16(0x8000);
@@ -647,7 +647,7 @@ struct RGB2RGB5x5
     }
 
     int srccn, blueIdx, greenBits;
-    #if CV_SIMD128 && CV_RGB2RGB5X5_FLAG
+    #if CV_SIMD128
     v_uint8x16 v_n3, v_n7;
     v_uint16x8 v_mask, v_0, v_full;
     #elif CV_NEON
