@@ -94,6 +94,7 @@ CV_ColorCvtBaseTest::CV_ColorCvtBaseTest( bool _custom_inv_transform, bool _allo
     custom_inv_transform = _custom_inv_transform;
     fwd_code = inv_code = -1;
     element_wise_relative_error = false;
+    min_log_array_size = 5;
 
     fwd_code_str = inv_code_str = 0;
 
