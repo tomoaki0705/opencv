@@ -146,7 +146,7 @@ template<> struct RGB2RGB<uchar>
         else
         {
             n *= 4;
-            if (hasSIMD128())
+            if (hasSIMD128() && false)
             {
                 for (; i <= n - 64; i += 64)
                 {
@@ -648,7 +648,6 @@ struct RGB2RGB5x5
                     v_uint16x8 v_dst_h = v_src_h[0] | v_src_h[1] | v_src_h[2] | v_alphaMask_h;
                     v_store((ushort*)dst + i, v_dst_l);
                     v_store((ushort*)dst + i + 8, v_dst_h);
-                    //v_swap_and_store<2, 7>((ushort*)dst + i, v_src, bidx, v_n7, v_n7);
                 }
             }
             #elif CV_NEON
@@ -1428,25 +1427,6 @@ struct RGB2Gray<ushort>
                 v_gray = process(v_src, v_coeffs);
                 v_store(dst + i, v_gray);
             }
-            //for (; i <= n - 8; i += 8, src += scn * 8)
-            //{
-            //    __m128i v_src[3];
-            //    v_src[0] = _mm_loadu_si128((__m128i const *)(src));
-            //    v_src[1] = _mm_loadu_si128((__m128i const *)(src + 8));
-            //    v_src[2] = _mm_loadu_si128((__m128i const *)(src + 16));
-
-            //    __m128i v_rgb[4];
-            //    v_rgb[0] = _mm_slli_si128(v_src[0], 2);
-            //    v_rgb[1] = _mm_alignr_epi8(v_src[1], v_src[0], 10);
-            //    v_rgb[2] = _mm_alignr_epi8(v_src[2], v_src[1], 6);
-            //    v_rgb[3] = _mm_srli_si128(v_src[2], 2);
-
-            //    __m128i v_gray;
-            //    process(v_rgb, v_coeffs,
-            //        v_gray);
-
-            //    _mm_storeu_si128((__m128i *)(dst + i), v_gray);
-            //}
         }
         else if (scn == 4 && hasSIMD128())
         {
@@ -1462,21 +1442,6 @@ struct RGB2Gray<ushort>
                 v_gray = process(v_rgb, v_coeffs);
                 v_store(dst + i, v_gray);
             }
-
-            //for (; i <= n - 8; i += 8, src += scn * 8)
-            //{
-            //    __m128i v_rgb[4];
-            //    v_rgb[0] = _mm_loadu_si128((__m128i const *)(src));
-            //    v_rgb[1] = _mm_loadu_si128((__m128i const *)(src + 8));
-            //    v_rgb[2] = _mm_loadu_si128((__m128i const *)(src + 16));
-            //    v_rgb[3] = _mm_loadu_si128((__m128i const *)(src + 24));
-
-            //    __m128i v_gray;
-            //    process(v_rgb, v_coeffs,
-            //        v_gray);
-
-            //    _mm_storeu_si128((__m128i *)(dst + i), v_gray);
-            //}
         }
 
         for (; i < n; i++, src += scn)
@@ -1486,7 +1451,7 @@ struct RGB2Gray<ushort>
     int srccn, coeffs[3];
     v_uint32x4 v_delta;
 };
-#endif // CV_SSE4_1
+#endif
 
 template <>
 struct RGB2Gray<float>
@@ -1782,9 +1747,7 @@ struct RGB2Gray<float>
     bool haveSIMD;
 };
 
-#endif // CV_SSE2
-
-#if !CV_NEON && !CV_SSE4_1 && !CV_SIMD128
+#else
 
 template<> struct RGB2Gray<ushort>
 {
@@ -1808,7 +1771,7 @@ template<> struct RGB2Gray<ushort>
     int coeffs[3];
 };
 
-#endif // !CV_NEON && !CV_SSE4_1 && !CV_SIMD128
+#endif
 
 
 /////////////////////////// RGBA <-> mRGBA (alpha premultiplied) //////////////

@@ -1078,7 +1078,7 @@ double CV_ColorLabTest::get_success_error_level( int /*test_case_idx*/, int i, i
 {
     int depth = test_mat[i][j].depth();
     // j == 0 is for forward code, j == 1 is for inverse code
-    return (depth ==  CV_8U) ? (srgb ? 32 : 8) :
+    return (depth ==  CV_8U) ? (srgb ? 33 : 8) :
            //(depth == CV_16U) ? 32 : // 16u is disabled
            srgb ? ((j == 0) ? 0.4 : 0.0055) : 1e-3;
 }
@@ -1257,7 +1257,7 @@ double CV_ColorLuvTest::get_success_error_level( int /*test_case_idx*/, int i, i
 {
     int depth = test_mat[i][j].depth();
     // j == 0 is for forward code, j == 1 is for inverse code
-    return (depth ==  CV_8U) ? (srgb ? 36 : 8) :
+    return (depth ==  CV_8U) ? (srgb ? 37 : 8) :
            //(depth == CV_16U) ? 32 : // 16u is disabled
            5e-2;
 }
@@ -1475,10 +1475,21 @@ void CV_ColorRGBTest::get_test_array_types_and_sizes( int test_case_idx, vector<
             fwd_code = CV_RGB2BGR, inv_code = CV_BGR2RGB;
             blue_idx = 2;
         }
-        else if( blue_idx == 0 )
-            fwd_code = CV_BGRA2BGR, inv_code = CV_BGR2BGRA;
+        else if( cvtest::randInt(rng) & 1 || blue_idx == 0 )
+        {
+            dst_bits = 24;
+            if (blue_idx == 0)
+                fwd_code = CV_BGRA2BGR, inv_code = CV_BGR2BGRA;
+            else
+                fwd_code = CV_RGBA2BGR, inv_code = CV_BGR2RGBA;
+        }
         else
-            fwd_code = CV_RGBA2BGR, inv_code = CV_BGR2RGBA;
+        {
+            dst_bits = 32;
+            types[INPUT][0] = types[OUTPUT][1] = types[REF_OUTPUT][1] = CV_MAKETYPE(CV_8U, cn);
+            types[OUTPUT][0] = types[REF_OUTPUT][0] = CV_MAKETYPE(CV_8U, 4);
+            fwd_code = CV_RGBA2BGRA, inv_code = CV_BGRA2RGBA;
+        }
     }
 
     if( CV_MAT_CN(types[INPUT][0]) != CV_MAT_CN(types[OUTPUT][0]) )
@@ -1523,6 +1534,20 @@ void CV_ColorRGBTest::convert_forward( const Mat& src, Mat& dst )
                         dst_row[j*3] = b;
                         dst_row[j*3+1] = g;
                         dst_row[j*3+2] = r;
+                    }
+                }
+                else if( dst_bits == 32 )
+                {
+                    for (j = 0; j < cols; j++)
+                    {
+                        uchar b = src_row[j*cn + blue_idx];
+                        uchar g = src_row[j*cn + 1];
+                        uchar r = src_row[j*cn + (blue_idx ^ 2)];
+                        uchar a = src_row[j*cn + 3];
+                        dst_row[j * cn] = b;
+                        dst_row[j * cn + 1] = g;
+                        dst_row[j * cn + 2] = r;
+                        dst_row[j * cn + 3] = a;
                     }
                 }
                 else
@@ -1613,6 +1638,21 @@ void CV_ColorRGBTest::convert_backward( const Mat& /*src*/, const Mat& src, Mat&
 
                         if( cn == 4 )
                             dst_row[j*cn + 3] = 255;
+                    }
+                }
+                else if( dst_bits == 32 )
+                {
+                    for( j = 0; j < cols; j++ )
+                    {
+                        uchar b = src_row[j*4];
+                        uchar g = src_row[j*4 + 1];
+                        uchar r = src_row[j*4 + 2];
+                        uchar a = src_row[j*4 + 3];
+
+                        dst_row[j*cn + blue_idx] = b;
+                        dst_row[j*cn + 1] = g;
+                        dst_row[j*cn + (blue_idx^2)] = r;
+                        dst_row[j*cn + 3] = a;
                     }
                 }
                 else
