@@ -146,7 +146,7 @@ template<> struct RGB2RGB<uchar>
         else
         {
             n *= 4;
-            if (hasSIMD128() && false)
+            if (hasSIMD128())
             {
                 for (; i <= n - 64; i += 64)
                 {
