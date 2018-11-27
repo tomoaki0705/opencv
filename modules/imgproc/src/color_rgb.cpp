@@ -1416,9 +1416,9 @@ struct RGB2Gray<ushort>
         if (scn == 3 && hasSIMD128())
         {
             v_uint16x8 v_coeffs[3];
-            v_coeffs[0] = v_setall_u16(coeffs[0]);
-            v_coeffs[1] = v_setall_u16(coeffs[1]);
-            v_coeffs[2] = v_setall_u16(coeffs[2]);
+            v_coeffs[0] = v_setall_u16((ushort)coeffs[0]);
+            v_coeffs[1] = v_setall_u16((ushort)coeffs[1]);
+            v_coeffs[2] = v_setall_u16((ushort)coeffs[2]);
 
             for (; i <= n - 8; i += 8, src += scn * 8)
             {
@@ -1431,9 +1431,9 @@ struct RGB2Gray<ushort>
         else if (scn == 4 && hasSIMD128())
         {
             v_uint16x8 v_coeffs[3];
-            v_coeffs[0] = v_setall_u16(coeffs[0]);
-            v_coeffs[1] = v_setall_u16(coeffs[1]);
-            v_coeffs[2] = v_setall_u16(coeffs[2]);
+            v_coeffs[0] = v_setall_u16((ushort)coeffs[0]);
+            v_coeffs[1] = v_setall_u16((ushort)coeffs[1]);
+            v_coeffs[2] = v_setall_u16((ushort)coeffs[2]);
 
             for (; i <= n - 8; i += 8, src += scn * 8)
             {
