@@ -1150,8 +1150,8 @@ struct RGB2Gray<ushort>
                 vget_high_u16(v_g), v_cg),
                 vget_high_u16(v_r), v_cr);
 
-            uint16x4_t v_dst0 = vmovn_u32(vrshrn_n_u32(v_dst0_, yuv_shift));
-            uint16x4_t v_dst1 = vmovn_u32(vrshrn_n_u32(v_dst1_, yuv_shift));
+            uint16x4_t v_dst0 = vrshrn_n_u32(v_dst0_, yuv_shift);
+            uint16x4_t v_dst1 = vrshrn_n_u32(v_dst1_, yuv_shift);
 
             vst1q_u16(dst + i, vcombine_u16(v_dst0, v_dst1));
         }
@@ -1179,7 +1179,7 @@ struct RGB2Gray<ushort>
                 v_g, v_cg),
                 v_r, v_cr);
 
-            vst1_u16(dst + i, vmovn_u32(vrshrn_n_u32(v_dst, yuv_shift)));
+            vst1_u16(dst + i, vrshrn_n_u32(v_dst, yuv_shift));
         }
 
         for (; i < n; i++, src += scn)
