@@ -240,7 +240,7 @@ NCVStatus scanRowsWrapperDevice(T_in *d_src, Ncv32u srcStride,
         <T_in, T_out, tbDoSqr>
         <<<roi.height, NUM_SCAN_THREADS, 0, nppStGetActiveCUDAstream()>>>
         (d_src, (Ncv32u)alignmentOffset, roi.width, srcStride, d_dst, dstStride);
-
+    cudaDeviceSynchronize();
     ncvAssertCUDALastErrorReturn(NPPST_CUDA_KERNEL_EXECUTION_ERROR);
 
     return NPPST_SUCCESS;
