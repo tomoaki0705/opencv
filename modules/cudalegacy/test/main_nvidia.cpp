@@ -304,10 +304,10 @@ bool nvidia_NPPST_Integral_Image(const std::string& test_data_path, OutputLevel 
 
     NCVAutoTestLister testListerII("NPPST Integral Image", outputLevel);
 
-    NCVTestSourceProvider<Ncv8u> testSrcRandom_8u(2010, 0, 255, 2048, 2048);
+    //NCVTestSourceProvider<Ncv8u> testSrcRandom_8u(2010, 0, 255, 2048, 2048);
     NCVTestSourceProvider<Ncv32f> testSrcRandom_32f(2010, -1.0f, 1.0f, 2048, 2048);
 
-    generateIntegralTests<Ncv8u, Ncv32u>(testListerII, testSrcRandom_8u, 2048, 2048);
+    //generateIntegralTests<Ncv8u, Ncv32u>(testListerII, testSrcRandom_8u, 2048, 2048);
     generateIntegralTests<Ncv32f, Ncv32f>(testListerII, testSrcRandom_32f, 2048, 2048);
 
     return testListerII.invoke();
