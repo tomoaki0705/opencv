@@ -76,6 +76,7 @@ bool TestIntegralImage<T_in, T_out>::init()
 template <class T_in, class T_out>
 bool TestIntegralImage<T_in, T_out>::process()
 {
+    static int testCounter = 0;
     NCVStatus ncvStat;
     bool rcode = false;
 
@@ -117,6 +118,20 @@ bool TestIntegralImage<T_in, T_out>::process()
 
     ncvAssertReturn(this->src.fill(h_img), false);
 
+    if (testCounter < 10)
+    {
+        std::cout << "-------------" << testCounter << std::endl;
+        for (size_t i = 0; i < h_img.height(); i++)
+        {
+            float* fptr = (float*)h_img.ptr();
+            for (size_t j = 0; j < h_img.width(); j++)
+            {
+                std::cout << fptr[h_img.stride()*i + j] << ',';
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "-------------" << testCounter << std::endl;
+    }
     ncvStat = h_img.copySolid(d_img, 0);
     ncvAssertReturn(ncvStat == NPPST_SUCCESS, false);
 
@@ -169,6 +184,20 @@ bool TestIntegralImage<T_in, T_out>::process()
     bool bLoopVirgin = true;
 
     NCV_SKIP_COND_BEGIN
+    if (testCounter < 10)
+    {
+        std::cout << "-------------" << testCounter << std::endl;
+        for (size_t i = 0; i < h_imgII.height(); i++)
+        {
+            float* fptr = (float*)h_imgII.ptr();
+            for (size_t j = 0; j < h_imgII.width(); j++)
+            {
+                std::cout << fptr[h_imgII.stride()*i + j] << ',';
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "-------------" << testCounter++ << std::endl;
+    }
     for (Ncv32u i=0; bLoopVirgin && i < h_img.height() + 1; i++)
     {
         for (Ncv32u j=0; bLoopVirgin && j < h_img.width() + 1; j++)

@@ -297,7 +297,7 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
         (d_src, srcStep, Tmp32_1.ptr(), PaddedWidthII32, roi);
     ncvAssertReturnNcvStat(ncvStat);
 
-    ncvStat = nppiStTranspose_32u_C1R_host((Ncv32u *)Tmp32_1.ptr(), PaddedWidthII32*sizeof(Ncv32u),
+    ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedWidthII32*sizeof(Ncv32u),
                                       (Ncv32u *)Tmp32_2.ptr(), PaddedHeightII32*sizeof(Ncv32u), NcvSize32u(WidthII, roi.height));
     ncvAssertReturnNcvStat(ncvStat);
 
@@ -306,7 +306,7 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
         (Tmp32_2.ptr(), PaddedHeightII32, Tmp32_1.ptr(), PaddedHeightII32, NcvSize32u(roi.height, WidthII));
     ncvAssertReturnNcvStat(ncvStat);
 
-    ncvStat = nppiStTranspose_32u_C1R_host((Ncv32u *)Tmp32_1.ptr(), PaddedHeightII32*sizeof(Ncv32u),
+    ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedHeightII32*sizeof(Ncv32u),
                                       (Ncv32u *)d_dst, dstStep*sizeof(Ncv32u), NcvSize32u(HeightII, WidthII));
     ncvAssertReturnNcvStat(ncvStat);
 
