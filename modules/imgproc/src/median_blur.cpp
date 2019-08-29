@@ -484,8 +484,6 @@ medianBlur_8u_Om( const Mat& _src, Mat& _dst, int m )
 }
 
 
-namespace {
-
 struct MinMax8u
 {
     typedef uchar value_type;
@@ -1160,7 +1158,6 @@ static bool ipp_medianFilter(Mat &src0, Mat &dst, int ksize)
     }
 }
 #endif
-}
 
 void medianBlur( InputArray _src0, OutputArray _dst, int ksize )
 {

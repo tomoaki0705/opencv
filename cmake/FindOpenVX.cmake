@@ -1,7 +1,7 @@
 ocv_clear_vars(HAVE_OPENVX)
 
 set(OPENVX_ROOT "" CACHE PATH "OpenVX install directory")
-set(OPENVX_LIB_CANDIDATES "openvx;vxu" CACHE STRING "OpenVX library candidates list")
+set(OPENVX_LIB_CANDIDATES "openvx;vxu;visionworks" CACHE STRING "OpenVX library candidates list")
 
 function(find_openvx_libs _found)
   foreach(one ${OPENVX_LIB_CANDIDATES})
