@@ -1045,6 +1045,12 @@ Ptr<DescriptorMatcher> DescriptorMatcher::create( const String& descriptorMatche
     {
         dm = makePtr<BFMatcher>(int(NORM_HAMMING2));
     }
+#ifdef HAVE_OPENCV_BDH
+    else if (!descriptorMatcherType.compare("BdhBased"))
+    {
+        dm = makePtr<BDHBasedMatcher>();
+    }
+#endif
     else
         CV_Error( Error::StsBadArg, "Unknown matcher name" );
 
@@ -1079,6 +1085,11 @@ Ptr<DescriptorMatcher> DescriptorMatcher::create( const MatcherType& matcherType
     case BRUTEFORCE_SL2:
         name = "BruteForce-SL2";
         break;
+#ifdef HAVE_OPENCV_BDH
+    case BDHBASED:
+        name = "BdhBased";
+        break;
+#endif
     default:
         CV_Error( Error::StsBadArg, "Specified descriptor matcher type is not supported." );
         break;
@@ -1454,6 +1465,381 @@ void FlannBasedMatcher::radiusMatchImpl( InputArray _queryDescriptors, std::vect
     }
 
     convertToDMatches( mergedDescriptors, indices, dists, matches );
+}
+
+#endif
+
+#ifdef HAVE_OPENCV_BDH
+
+/*
+* BDH based matcher
+*/
+BDHBasedMatcher::BDHBasedMatcher(const Ptr<bdh::IndexParams>& _indexParams, const Ptr<bdh::searchParams>& _searchParams)
+    : indexParams(_indexParams), searchParams(_searchParams), addedDescCount(0)
+{
+    CV_Assert(_indexParams);
+    CV_Assert(_searchParams);
+}
+
+Ptr<BDHBasedMatcher> BDHBasedMatcher::create()
+{
+    return makePtr<BDHBasedMatcher>();
+}
+
+void BDHBasedMatcher::add(InputArrayOfArrays _descriptors)
+{
+    DescriptorMatcher::add(_descriptors);
+
+    if (_descriptors.isUMatVector())
+    {
+        std::vector<UMat> descriptors;
+        _descriptors.getUMatVector(descriptors);
+
+        for (size_t i = 0; i < descriptors.size(); i++)
+        {
+            addedDescCount += descriptors[i].rows;
+        }
+    }
+    else if (_descriptors.isUMat())
+    {
+        addedDescCount += _descriptors.getUMat().rows;
+    }
+    else if (_descriptors.isMatVector())
+    {
+        std::vector<Mat> descriptors;
+        _descriptors.getMatVector(descriptors);
+        for (size_t i = 0; i < descriptors.size(); i++)
+        {
+            addedDescCount += descriptors[i].rows;
+        }
+    }
+    else if (_descriptors.isMat())
+    {
+        addedDescCount += _descriptors.getMat().rows;
+    }
+    else
+    {
+        CV_Assert(_descriptors.isUMat() || _descriptors.isUMatVector() || _descriptors.isMat() || _descriptors.isMatVector());
+    }
+}
+
+void BDHBasedMatcher::clear()
+{
+    DescriptorMatcher::clear();
+
+    mergedDescriptors.clear();
+    bdhIndex.release();
+
+    addedDescCount = 0;
+}
+
+const static cv::String kCashFile = "trainedFeature.dat";
+
+void BDHBasedMatcher::train()
+{
+    CV_INSTRUMENT_REGION();
+
+    if (true)  // create something linke isTrained()
+    {
+        if (bdhIndex->loadParameters(kCashFile) == false)
+        {
+            bdhIndex->Build(mergedDescriptors.getDescriptors(), 10, 13);
+            bdhIndex->saveParameters(kCashFile);
+        }
+    }
+}
+
+void BDHBasedMatcher::read(const FileNode& fn)
+{
+    CV_UNUSED(fn);
+    // IMPLEMENT ME !
+    //if (!indexParams)
+    //    indexParams = makePtr<bdh::IndexParams>();
+
+    //FileNode ip = fn["indexParams"];
+    //CV_Assert(ip.type() == FileNode::SEQ);
+
+    //for (int i = 0; i < (int)ip.size(); ++i)
+    //{
+    //    CV_Assert(ip[i].type() == FileNode::MAP);
+    //    String _name = (String)ip[i]["name"];
+    //    FlannIndexType type = (FlannIndexType)(int)ip[i]["type"];
+    //    CV_CheckLE((int)type, (int)LAST_VALUE_FLANN_INDEX_TYPE, "");
+
+    //    switch (type)
+    //    {
+    //    case FLANN_INDEX_TYPE_8U:
+    //    case FLANN_INDEX_TYPE_8S:
+    //    case FLANN_INDEX_TYPE_16U:
+    //    case FLANN_INDEX_TYPE_16S:
+    //    case FLANN_INDEX_TYPE_32S:
+    //        indexParams->setInt(_name, (int)ip[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_32F:
+    //        indexParams->setFloat(_name, (float)ip[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_64F:
+    //        indexParams->setDouble(_name, (double)ip[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_STRING:
+    //        indexParams->setString(_name, (String)ip[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_BOOL:
+    //        indexParams->setBool(_name, (int)ip[i]["value"] != 0);
+    //        break;
+    //    case FLANN_INDEX_TYPE_ALGORITHM:
+    //        indexParams->setAlgorithm((int)ip[i]["value"]);
+    //        break;
+    //        // don't default: - compiler warning is here
+    //    };
+    //}
+
+    //if (!searchParams)
+    //    searchParams = makePtr<flann::SearchParams>();
+
+    //FileNode sp = fn["searchParams"];
+    //CV_Assert(sp.type() == FileNode::SEQ);
+
+    //for (int i = 0; i < (int)sp.size(); ++i)
+    //{
+    //    CV_Assert(sp[i].type() == FileNode::MAP);
+    //    String _name = (String)sp[i]["name"];
+    //    FlannIndexType type = (FlannIndexType)(int)sp[i]["type"];
+    //    CV_CheckLE((int)type, (int)LAST_VALUE_FLANN_INDEX_TYPE, "");
+
+    //    switch (type)
+    //    {
+    //    case FLANN_INDEX_TYPE_8U:
+    //    case FLANN_INDEX_TYPE_8S:
+    //    case FLANN_INDEX_TYPE_16U:
+    //    case FLANN_INDEX_TYPE_16S:
+    //    case FLANN_INDEX_TYPE_32S:
+    //        searchParams->setInt(_name, (int)sp[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_32F:
+    //        searchParams->setFloat(_name, (float)sp[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_64F:
+    //        searchParams->setDouble(_name, (double)sp[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_STRING:
+    //        searchParams->setString(_name, (String)sp[i]["value"]);
+    //        break;
+    //    case FLANN_INDEX_TYPE_BOOL:
+    //        searchParams->setBool(_name, (int)sp[i]["value"] != 0);
+    //        break;
+    //    case FLANN_INDEX_TYPE_ALGORITHM:
+    //        searchParams->setAlgorithm((int)sp[i]["value"]);
+    //        break;
+    //        // don't default: - compiler warning is here
+    //    };
+    //}
+
+    //bdhIndex.release();
+}
+
+void BDHBasedMatcher::write(FileStorage& fs) const
+{
+    CV_UNUSED(fs);
+    //writeFormat(fs);
+    //fs << "indexParams" << "[";
+
+    //if (indexParams)
+    //{
+    //    std::vector<String> names;
+    //    std::vector<FlannIndexType> types;
+    //    std::vector<String> strValues;
+    //    std::vector<double> numValues;
+
+    //    indexParams->getAll(names, types, strValues, numValues);
+
+    //    for (size_t i = 0; i < names.size(); ++i)
+    //    {
+    //        fs << "{" << "name" << names[i] << "type" << types[i] << "value";
+    //        FlannIndexType type = (FlannIndexType)types[i];
+    //        if ((int)type < 0 || type > LAST_VALUE_FLANN_INDEX_TYPE)
+    //        {
+    //            fs << (double)numValues[i];
+    //            fs << "typename" << strValues[i];
+    //            fs << "}";
+    //            continue;
+    //        }
+    //        switch (type)
+    //        {
+    //        case FLANN_INDEX_TYPE_8U:
+    //            fs << (uchar)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_8S:
+    //            fs << (char)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_16U:
+    //            fs << (ushort)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_16S:
+    //            fs << (short)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_32S:
+    //        case FLANN_INDEX_TYPE_BOOL:
+    //        case FLANN_INDEX_TYPE_ALGORITHM:
+    //            fs << (int)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_32F:
+    //            fs << (float)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_64F:
+    //            fs << (double)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_STRING:
+    //            fs << strValues[i];
+    //            break;
+    //            // don't default: - compiler warning is here
+    //        }
+    //        fs << "}";
+    //    }
+    //}
+
+    //fs << "]" << "searchParams" << "[";
+
+    //if (searchParams)
+    //{
+    //    std::vector<String> names;
+    //    std::vector<FlannIndexType> types;
+    //    std::vector<String> strValues;
+    //    std::vector<double> numValues;
+
+    //    searchParams->getAll(names, types, strValues, numValues);
+
+    //    for (size_t i = 0; i < names.size(); ++i)
+    //    {
+    //        fs << "{" << "name" << names[i] << "type" << types[i] << "value";
+    //        FlannIndexType type = (FlannIndexType)types[i];
+    //        if ((int)type < 0 || type > LAST_VALUE_FLANN_INDEX_TYPE)
+    //        {
+    //            fs << (double)numValues[i];
+    //            fs << "typename" << strValues[i];
+    //            fs << "}";
+    //            continue;
+    //        }
+    //        switch (type)
+    //        {
+    //        case FLANN_INDEX_TYPE_8U:
+    //            fs << (uchar)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_8S:
+    //            fs << (char)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_16U:
+    //            fs << (ushort)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_16S:
+    //            fs << (short)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_32S:
+    //        case FLANN_INDEX_TYPE_BOOL:
+    //        case FLANN_INDEX_TYPE_ALGORITHM:
+    //            fs << (int)numValues[i];
+    //            break;
+    //        case CV_32F:
+    //            fs << (float)numValues[i];
+    //            break;
+    //        case CV_64F:
+    //            fs << (double)numValues[i];
+    //            break;
+    //        case FLANN_INDEX_TYPE_STRING:
+    //            fs << strValues[i];
+    //            break;
+    //            // don't default: - compiler warning is here
+    //        }
+    //        fs << "}";
+    //    }
+    //}
+    //fs << "]";
+}
+
+bool BDHBasedMatcher::isMaskSupported() const
+{
+    return false;
+}
+
+Ptr<DescriptorMatcher> BDHBasedMatcher::clone(bool emptyTrainData) const
+{
+    Ptr<BDHBasedMatcher> matcher = makePtr<BDHBasedMatcher>(indexParams, searchParams);
+    if (!emptyTrainData)
+    {
+        CV_Error(Error::StsNotImplemented, "deep clone functionality is not implemented, because "
+            "Flann::Index has not copy constructor or clone method ");
+#if 0
+        //matcher->flannIndex;
+        matcher->addedDescCount = addedDescCount;
+        matcher->mergedDescriptors = DescriptorCollection(mergedDescriptors);
+        std::transform(trainDescCollection.begin(), trainDescCollection.end(),
+            matcher->trainDescCollection.begin(), clone_op);
+#endif
+    }
+    return matcher;
+}
+
+void BDHBasedMatcher::convertToDMatches(const DescriptorCollection& collection, const Mat& indices, const Mat& dists,
+    std::vector<std::vector<DMatch> >& matches)
+{
+    matches.resize(indices.rows);
+    for (int i = 0; i < indices.rows; i++)
+    {
+        for (int j = 0; j < indices.cols; j++)
+        {
+            int idx = indices.at<int>(i, j);
+            if (idx >= 0)
+            {
+                int imgIdx, trainIdx;
+                collection.getLocalIdx(idx, imgIdx, trainIdx);
+                float dist = 0;
+                if (dists.type() == CV_32S)
+                    dist = static_cast<float>(dists.at<int>(i, j));
+                else
+                    dist = std::sqrt(dists.at<float>(i, j));
+                matches[i].push_back(DMatch(i, trainIdx, imgIdx, dist));
+            }
+        }
+    }
+}
+
+void BDHBasedMatcher::knnMatchImpl(InputArray _queryDescriptors, std::vector<std::vector<DMatch> >& matches, int knn,
+    InputArrayOfArrays /*masks*/, bool /*compactResult*/)
+{
+    CV_INSTRUMENT_REGION();
+
+    Mat queryDescriptors = _queryDescriptors.getMat();
+    Mat indices(queryDescriptors.rows, knn, CV_32SC1);
+    Mat dists(queryDescriptors.rows, knn, CV_32FC1);
+    double searchParam = 10;
+    cv::bdh::point_t* KNNpoint = new cv::bdh::point_t[queryDescriptors.rows];
+
+    for (size_t i = 0; i < queryDescriptors.rows; i++)
+    {
+        bdhIndex->NearestNeighbor(queryDescriptors.row(i), &KNNpoint[i], searchParam, bdh::search_mode::NumPoints, 1, DBL_MAX);
+    }
+
+    convertToDMatches(mergedDescriptors, indices, dists, matches);
+}
+
+void BDHBasedMatcher::radiusMatchImpl(InputArray _queryDescriptors, std::vector<std::vector<DMatch> >& matches, float maxDistance,
+    InputArrayOfArrays /*masks*/, bool /*compactResult*/)
+{
+    CV_INSTRUMENT_REGION();
+
+    //Mat queryDescriptors = _queryDescriptors.getMat();
+    //const int count = mergedDescriptors.size(); // TODO do count as param?
+    //Mat indices(queryDescriptors.rows, count, CV_32SC1, Scalar::all(-1));
+    //Mat dists(queryDescriptors.rows, count, CV_32FC1, Scalar::all(-1));
+    //for (int qIdx = 0; qIdx < queryDescriptors.rows; qIdx++)
+    //{
+    //    Mat queryDescriptorsRow = queryDescriptors.row(qIdx);
+    //    Mat indicesRow = indices.row(qIdx);
+    //    Mat distsRow = dists.row(qIdx);
+    //    bdhIndex->radiusSearch(queryDescriptorsRow, indicesRow, distsRow, maxDistance*maxDistance, count, *searchParams);
+    //}
+
+    //convertToDMatches(mergedDescriptors, indices, dists, matches);
 }
 
 #endif

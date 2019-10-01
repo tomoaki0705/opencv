@@ -37,7 +37,7 @@ int main( int argc, char* argv[] )
 
     //-- Step 2: Matching descriptor vectors with a FLANN based matcher
     // Since SURF is a floating-point descriptor NORM_L2 is used
-    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
+    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::BDHBASED);
     std::vector< std::vector<DMatch> > knn_matches;
     matcher->knnMatch( descriptors1, descriptors2, knn_matches, 2 );
 

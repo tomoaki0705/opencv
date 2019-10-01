@@ -50,6 +50,10 @@
 #include "opencv2/flann/miniflann.hpp"
 #endif
 
+#ifdef HAVE_OPENCV_BDH
+#include "opencv2/bdh.hpp"
+#endif
+
 /**
   @defgroup features2d 2D Features Framework
   @{
@@ -863,7 +867,8 @@ public:
         BRUTEFORCE_L1         = 3,
         BRUTEFORCE_HAMMING    = 4,
         BRUTEFORCE_HAMMINGLUT = 5,
-        BRUTEFORCE_SL2        = 6
+        BRUTEFORCE_SL2        = 6,
+        BDHBASED              = 7
     };
 
     virtual ~DescriptorMatcher();
@@ -1182,6 +1187,55 @@ protected:
     Ptr<flann::IndexParams> indexParams;
     Ptr<flann::SearchParams> searchParams;
     Ptr<flann::Index> flannIndex;
+
+    DescriptorCollection mergedDescriptors;
+    int addedDescCount;
+};
+
+#endif
+
+#if defined(HAVE_OPENCV_BDH) || defined(CV_DOXYGEN)
+
+/** @brief Flann-based descriptor matcher.
+
+This matcher trains cv::flann::Index on a train descriptor collection and calls its nearest search
+methods to find the best matches. So, this matcher may be faster when matching a large train
+collection than the brute force matcher. FlannBasedMatcher does not support masking permissible
+matches of descriptor sets because flann::Index does not support this. :
+*/
+class CV_EXPORTS_W BDHBasedMatcher : public DescriptorMatcher
+{
+public:
+    CV_WRAP BDHBasedMatcher(const Ptr<bdh::IndexParams>& indexParams = makePtr<bdh::IndexParams>(),
+        const Ptr<bdh::searchParams>& searchParams = makePtr<bdh::searchParams>());
+
+    virtual void add(InputArrayOfArrays descriptors) CV_OVERRIDE;
+    virtual void clear() CV_OVERRIDE;
+
+    // Reads matcher object from a file node
+    virtual void read(const FileNode&) CV_OVERRIDE;
+    // Writes matcher object to a file storage
+    virtual void write(FileStorage&) const CV_OVERRIDE;
+
+    virtual void train() CV_OVERRIDE;
+    virtual bool isMaskSupported() const CV_OVERRIDE;
+
+    CV_WRAP static Ptr<BDHBasedMatcher> create();
+
+    virtual Ptr<DescriptorMatcher> clone(bool emptyTrainData = false) const CV_OVERRIDE;
+protected:
+    static void convertToDMatches(const DescriptorCollection& descriptors,
+        const Mat& indices, const Mat& distances,
+        std::vector<std::vector<DMatch> >& matches);
+
+    virtual void knnMatchImpl(InputArray queryDescriptors, std::vector<std::vector<DMatch> >& matches, int k,
+        InputArrayOfArrays masks = noArray(), bool compactResult = false) CV_OVERRIDE;
+    virtual void radiusMatchImpl(InputArray queryDescriptors, std::vector<std::vector<DMatch> >& matches, float maxDistance,
+        InputArrayOfArrays masks = noArray(), bool compactResult = false) CV_OVERRIDE;
+
+    Ptr<bdh::IndexParams> indexParams;
+    Ptr<bdh::searchParams> searchParams;
+    Ptr<bdh::Index> bdhIndex;
 
     DescriptorCollection mergedDescriptors;
     int addedDescCount;
