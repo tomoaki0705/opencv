@@ -1533,20 +1533,34 @@ void BDHBasedMatcher::clear()
     addedDescCount = 0;
 }
 
-const static cv::String kCashFile = "trainedFeature.dat";
-
 void BDHBasedMatcher::train()
 {
     CV_INSTRUMENT_REGION();
 
-    if (true)  // create something linke isTrained()
+    if (!bdhIndex /*|| bdhIndex->loadParameters(kCashFile) == false*/)  // create something linke isTrained()
     {
-        if (bdhIndex->loadParameters(kCashFile) == false)
+        mergedDescriptors.set(trainDescCollection);
+        if (!bdhIndex)
+        {
+            bdhIndex = makePtr<bdh::Index>(mergedDescriptors.getDescriptors(), 10, 13);
+        }
+        else
         {
             bdhIndex->Build(mergedDescriptors.getDescriptors(), 10, 13);
-            bdhIndex->saveParameters(kCashFile);
         }
     }
+    //if (!flannIndex || mergedDescriptors.size() < addedDescCount)
+    //{
+    //    // FIXIT: Workaround for 'utrainDescCollection' issue (PR #2142)
+    //    if (!utrainDescCollection.empty())
+    //    {
+    //        CV_Assert(trainDescCollection.size() == 0);
+    //        for (size_t i = 0; i < utrainDescCollection.size(); ++i)
+    //            trainDescCollection.push_back(utrainDescCollection[i].getMat(ACCESS_READ));
+    //    }
+    //    mergedDescriptors.set(trainDescCollection);
+    //    flannIndex = makePtr<flann::Index>(mergedDescriptors.getDescriptors(), *indexParams);
+    //}
 }
 
 void BDHBasedMatcher::read(const FileNode& fn)
@@ -1812,14 +1826,32 @@ void BDHBasedMatcher::knnMatchImpl(InputArray _queryDescriptors, std::vector<std
     Mat indices(queryDescriptors.rows, knn, CV_32SC1);
     Mat dists(queryDescriptors.rows, knn, CV_32FC1);
     double searchParam = 10;
-    cv::bdh::point_t* KNNpoint = new cv::bdh::point_t[queryDescriptors.rows];
+    cv::bdh::point_t* KNNpoint = new cv::bdh::point_t[knn];
 
+    std::vector<bdh::hashKey_t> bucketList;
     for (size_t i = 0; i < queryDescriptors.rows; i++)
     {
-        bdhIndex->NearestNeighbor(queryDescriptors.row(i), &KNNpoint[i], searchParam, bdh::search_mode::NumPoints, 1, DBL_MAX);
+        bdh::point_t Point;
+        bdhIndex->getBucketList(queryDescriptors.row(i), searchParam, bdh::search_mode::NumPoints, bucketList);
+        bdhIndex->linearSearchInNNcandidates(queryDescriptors.row(i), KNNpoint, knn, DBL_MAX, bucketList);
+
+        std::vector<DMatch> possibleMatches;
+        for (size_t j = 0; j < knn; j++)
+        {
+            if (KNNpoint[j].distance != DBL_MAX)
+            {
+                DMatch possibleMatch;
+                possibleMatch.queryIdx = i;
+                possibleMatch.trainIdx = KNNpoint[j].index;
+                possibleMatch.distance = KNNpoint[j].distance;
+                possibleMatch.imgIdx = 0;
+                possibleMatches.push_back(possibleMatch);
+            }
+        }
+        matches.push_back(possibleMatches);
     }
 
-    convertToDMatches(mergedDescriptors, indices, dists, matches);
+    //convertToDMatches(mergedDescriptors, indices, dists, matches);
 }
 
 void BDHBasedMatcher::radiusMatchImpl(InputArray _queryDescriptors, std::vector<std::vector<DMatch> >& matches, float maxDistance,
