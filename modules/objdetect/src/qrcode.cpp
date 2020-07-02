@@ -317,6 +317,12 @@ bool QRDetect::localization()
     if( list_lines_x.empty() ) { return false; }
     vector<Point2f> list_lines_y = separateVerticalLines(list_lines_x);
     if( list_lines_y.size() < 3 ) { return false; }
+    std::cout << "height :" << bin_barcode.rows;
+    std::cout << "width  :" << bin_barcode.cols;
+    for(size_t i = 0;i < list_lines_y.size();i++)
+    {
+        std::cout << "[" << i << "] " << list_lines_y[i] << std::endl;
+    }
 
     vector<Point2f> centers;
     Mat labels;
@@ -357,7 +363,13 @@ bool QRDetect::localization()
 
 bool QRDetect::computeTransformationPoints()
 {
+    CV_TRACE_FUNCTION();
+    std::cout << "localization_points.size : " << localization_points.size() << std::endl;
     if (localization_points.size() != 3) { return false; }
+    for(size_t i = 0;i < localization_points.size();i++)
+    {
+        std::cout << "[" << i << "] x:" << localization_points[i].x << "\ty:" << localization_points[i].y << std::endl;
+    }
 
     vector<Point> locations, non_zero_elem[3], newHull;
     vector<Point2f> new_non_zero_elem[3];
@@ -421,6 +433,8 @@ bool QRDetect::computeTransformationPoints()
     if (down_left_edge_point == Point2f(0, 0) ||
         up_right_edge_point  == Point2f(0, 0) ||
         new_non_zero_elem[0].size() == 0) { return false; }
+    std::cout << "Passed (" << __LINE__ << ")" << std::endl;
+    std::cout << "up_right_edge_point  x:" << up_right_edge_point.x << "\ty:" << up_right_edge_point.y << "(" << __LINE__ << ")" << std::endl;
 
     double max_area = -1;
     up_left_edge_point = new_non_zero_elem[0][0];
@@ -440,6 +454,7 @@ bool QRDetect::computeTransformationPoints()
             max_area = temp_area;
         }
     }
+    std::cout << "up_right_edge_point  x:" << up_right_edge_point.x << "\ty:" << up_right_edge_point.y << "(" << __LINE__ << ")" << std::endl;
 
     Point2f down_max_delta_point, up_max_delta_point;
     double norm_down_max_delta = -1, norm_up_max_delta = -1;
@@ -465,6 +480,7 @@ bool QRDetect::computeTransformationPoints()
             norm_up_max_delta = temp_norm_delta;
         }
     }
+    std::cout << "up_right_edge_point  x:" << up_right_edge_point.x << "\ty:" << up_right_edge_point.y << "(" << __LINE__ << ")" << std::endl;
 
     transformation_points.push_back(down_left_edge_point);
     transformation_points.push_back(up_left_edge_point);
@@ -476,6 +492,14 @@ bool QRDetect::computeTransformationPoints()
     vector<Point2f> quadrilateral = getQuadrilateral(transformation_points);
     transformation_points = quadrilateral;
 
+    int width = bin_barcode.size().width;
+    int height = bin_barcode.size().height;
+    for (size_t i = 0; i < transformation_points.size(); i++)
+    {
+        std::cout << "[" << i << "] x:" << transformation_points[i].x << "\ty:" << transformation_points[i].y << std::endl;
+        if ((cvRound(transformation_points[i].x) > width) ||
+            (cvRound(transformation_points[i].y) > height)) { return false; }
+    }
     return true;
 }
 
@@ -778,12 +802,16 @@ void QRCodeDetector::setEpsY(double epsY) { p->epsY = epsY; }
 
 bool QRCodeDetector::detect(InputArray in, OutputArray points) const
 {
-    Mat inarr = in.getMat();
-    CV_Assert(!inarr.empty());
-    CV_Assert(inarr.type() == CV_8UC1);
+    Mat inarr;
+    std::cout << "Starts checkQRInputImage" << std::endl;
+    if (!checkQRInputImage(in, inarr))
+        return false;
+
     QRDetect qrdet;
     qrdet.init(inarr, p->epsX, p->epsY);
+    std::cout << "Starts localization" << std::endl;
     if (!qrdet.localization()) { return false; }
+    std::cout << "Starts computeTransformationPoints" << std::endl;
     if (!qrdet.computeTransformationPoints()) { return false; }
     vector<Point2f> pnts2f = qrdet.getTransformationPoints();
     Mat(pnts2f).convertTo(points, points.fixedType() ? points.type() : CV_32FC2);
@@ -1083,7 +1111,216 @@ CV_EXPORTS bool decodeQRCode(InputArray in, InputArray points, std::string &deco
                                              straight_qrcode.type() : CV_32FC2);
     }
 
-    return exit_flag;
+    return ok ? decoded_info : std::string();
+}
+
+cv::String QRCodeDetector::detectAndDecode(InputArray in,
+                                           OutputArray points_,
+                                           OutputArray straight_qrcode)
+{
+    Mat inarr;
+    if (!checkQRInputImage(in, inarr))
+    {
+        points_.release();
+        return std::string();
+    }
+
+    vector<Point2f> points;
+    bool ok = detect(inarr, points);
+    if (!ok)
+    {
+        std::cout << "detect failed" << std::endl;
+        points_.release();
+        return std::string();
+    }
+    updatePointsResult(points_, points);
+    std::string decoded_info = decode(inarr, points, straight_qrcode);
+    return decoded_info;
+}
+
+class QRDetectMulti : public QRDetect
+{
+public:
+    void init(const Mat& src, double eps_vertical_ = 0.2, double eps_horizontal_ = 0.1);
+    bool localization();
+    bool computeTransformationPoints(const size_t cur_ind);
+    vector< vector < Point2f > > getTransformationPoints() { return transformation_points;}
+
+protected:
+    int findNumberLocalizationPoints(vector<Point2f>& tmp_localization_points);
+    void findQRCodeContours(vector<Point2f>& tmp_localization_points, vector< vector< Point2f > >& true_points_group, const int& num_qrcodes);
+    bool checkSets(vector<vector<Point2f> >& true_points_group, vector<vector<Point2f> >& true_points_group_copy,
+                   vector<Point2f>& tmp_localization_points);
+    void deleteUsedPoints(vector<vector<Point2f> >& true_points_group, vector<vector<Point2f> >& loc,
+                          vector<Point2f>& tmp_localization_points);
+    void fixationPoints(vector<Point2f> &local_point);
+    bool checkPoints(vector<Point2f> quadrangle_points);
+    bool checkPointsInsideQuadrangle(const vector<Point2f>& quadrangle_points);
+    bool checkPointsInsideTriangle(const vector<Point2f>& triangle_points);
+
+    Mat bin_barcode_fullsize, bin_barcode_temp;
+    vector<Point2f> not_resized_loc_points;
+    vector<Point2f> resized_loc_points;
+    vector< vector< Point2f > > localization_points, transformation_points;
+    struct compareDistanse_y
+    {
+        bool operator()(const Point2f& a, const Point2f& b) const
+        {
+            return a.y < b.y;
+        }
+    };
+    struct compareSquare
+    {
+        const vector<Point2f>& points;
+        compareSquare(const vector<Point2f>& points_) : points(points_) {}
+        bool operator()(const Vec3i& a, const Vec3i& b) const;
+    };
+    Mat original;
+    class ParallelSearch : public ParallelLoopBody
+    {
+    public:
+        ParallelSearch(vector< vector< Point2f > >& true_points_group_,
+                vector< vector< Point2f > >& loc_, int iter_, vector<int>& end_,
+                vector< vector< Vec3i > >& all_points_,
+                QRDetectMulti& cl_)
+        :
+            true_points_group(true_points_group_),
+            loc(loc_),
+            iter(iter_),
+            end(end_),
+            all_points(all_points_),
+            cl(cl_)
+        {
+        }
+        void operator()(const Range& range) const CV_OVERRIDE;
+        vector< vector< Point2f > >& true_points_group;
+        vector< vector< Point2f > >& loc;
+        int iter;
+        vector<int>& end;
+        vector< vector< Vec3i > >& all_points;
+        QRDetectMulti& cl;
+    };
+};
+
+void QRDetectMulti::ParallelSearch::operator()(const Range& range) const
+{
+    for (int s = range.start; s < range.end; s++)
+    {
+        bool flag = false;
+        for (int r = iter; r < end[s]; r++)
+        {
+            if (flag)
+                break;
+
+            size_t x = iter + s;
+            size_t k = r - iter;
+            vector<Point2f> triangle;
+
+            for (int l = 0; l < 3; l++)
+            {
+                triangle.push_back(true_points_group[s][all_points[s][k][l]]);
+            }
+
+            if (cl.checkPointsInsideTriangle(triangle))
+            {
+                bool flag_for_break = false;
+                cl.fixationPoints(triangle);
+                if (triangle.size() == 3)
+                {
+                    cl.localization_points[x] = triangle;
+                    if (cl.purpose == cl.SHRINKING)
+                    {
+
+                        for (size_t j = 0; j < 3; j++)
+                        {
+                            cl.localization_points[x][j] *= cl.coeff_expansion;
+                        }
+                    }
+                    else if (cl.purpose == cl.ZOOMING)
+                    {
+                        for (size_t j = 0; j < 3; j++)
+                        {
+                            cl.localization_points[x][j] /= cl.coeff_expansion;
+                        }
+                    }
+                    for (size_t i = 0; i < 3; i++)
+                    {
+                        for (size_t j = i + 1; j < 3; j++)
+                        {
+                            if (norm(cl.localization_points[x][i] - cl.localization_points[x][j]) < 10)
+                            {
+                                cl.localization_points[x].clear();
+                                flag_for_break = true;
+                                break;
+                            }
+                        }
+                        if (flag_for_break)
+                            break;
+                    }
+                    if ((!flag_for_break)
+                            && (cl.localization_points[x].size() == 3)
+                            && (cl.computeTransformationPoints(x))
+                            && (cl.checkPointsInsideQuadrangle(cl.transformation_points[x]))
+                            && (cl.checkPoints(cl.transformation_points[x])))
+                    {
+                        for (int l = 0; l < 3; l++)
+                        {
+                            loc[s][all_points[s][k][l]].x = -1;
+                        }
+
+                        flag = true;
+                        break;
+                    }
+                }
+                if (flag)
+                {
+                    break;
+                }
+                else
+                {
+                    cl.transformation_points[x].clear();
+                    cl.localization_points[x].clear();
+                }
+            }
+        }
+    }
+}
+
+void QRDetectMulti::init(const Mat& src, double eps_vertical_, double eps_horizontal_)
+{
+    CV_TRACE_FUNCTION();
+
+    CV_Assert(!src.empty());
+    const double min_side = std::min(src.size().width, src.size().height);
+    if (min_side < 512.0)
+    {
+        purpose = ZOOMING;
+        coeff_expansion = 512.0 / min_side;
+        const int width  = cvRound(src.size().width  * coeff_expansion);
+        const int height = cvRound(src.size().height  * coeff_expansion);
+        Size new_size(width, height);
+        resize(src, barcode, new_size, 0, 0, INTER_LINEAR);
+    }
+    else if (min_side > 512.0)
+    {
+        purpose = SHRINKING;
+        coeff_expansion = min_side / 512.0;
+        const int width  = cvRound(src.size().width  / coeff_expansion);
+        const int height = cvRound(src.size().height  / coeff_expansion);
+        Size new_size(width, height);
+        resize(src, barcode, new_size, 0, 0, INTER_AREA);
+    }
+    else
+    {
+        purpose = UNCHANGED;
+        coeff_expansion = 1.0;
+        barcode = src.clone();
+    }
+
+    eps_vertical   = eps_vertical_;
+    eps_horizontal = eps_horizontal_;
+    adaptiveThreshold(barcode, bin_barcode, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
+    adaptiveThreshold(src, bin_barcode_fullsize, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY, 83, 2);
 }
 
 }
