@@ -284,10 +284,13 @@ namespace cv { namespace dnn { namespace cuda4dnn { namespace csl { namespace cu
 
             size_t free_memory, total_memory;
             CUDA4DNN_CHECK_CUDA(cudaMemGetInfo(&free_memory, &total_memory));
-
+            std::cout << "returnedAlgoCount:" << returnedAlgoCount << std::endl;
+            std::cout << "status\talgo\tmemory" << returnedAlgoCount << std::endl;
             bool found_conv_algorithm = false;
+            bool insufficient_memory  = false;
             for (int i = 0; i < returnedAlgoCount; i++)
             {
+                std::cout << results[i].status << "\t" << results[i].algo << "\t" << results[i].memory  << "\t(" << i << ")" << std::endl;
                 if (results[i].status == CUDNN_STATUS_SUCCESS &&
                     results[i].algo != CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED &&
                     results[i].memory < free_memory)
@@ -297,8 +300,17 @@ namespace cv { namespace dnn { namespace cuda4dnn { namespace csl { namespace cu
                     workspace_size = results[i].memory;
                     break;
                 }
+                else if
+                   (results[i].status == CUDNN_STATUS_SUCCESS &&
+                    results[i].algo != CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED &&
+                    free_memory <= results[i].memory)
+                {
+                    insufficient_memory = true;
+                }
             }
 
+            if (insufficient_memory && !found_conv_algorithm)
+                CV_Error (cv::Error::GpuApiCallError, "not enough memory for convolution.");
             if (!found_conv_algorithm)
                 CV_Error (cv::Error::GpuApiCallError, "cuDNN did not return a suitable algorithm for convolution.");
 #else
