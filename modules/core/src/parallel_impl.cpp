@@ -12,8 +12,8 @@
 #include <opencv2/core/utils/configuration.private.hpp>
 
 #include <opencv2/core/utils/logger.defines.hpp>
-//#undef CV_LOG_STRIP_LEVEL
-//#define CV_LOG_STRIP_LEVEL CV_LOG_LEVEL_VERBOSE + 1
+#undef CV_LOG_STRIP_LEVEL
+#define CV_LOG_STRIP_LEVEL CV_LOG_LEVEL_VERBOSE + 1
 #include <opencv2/core/utils/logger.hpp>
 
 #include <opencv2/core/utils/trace.private.hpp>
