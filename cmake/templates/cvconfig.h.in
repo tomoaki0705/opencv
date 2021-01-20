@@ -43,6 +43,9 @@
 /* NVIDIA CUDA Fast Fourier Transform (FFT) API*/
 #cmakedefine HAVE_CUFFT
 
+/* NVIDIA Optical Flow SDK API Version */
+#cmakedefine CV_NVIDIA_OPTFLOW_SDK_VER ${OPENCV_NVIDIA_OPTFLOW_SDK_VER}
+
 /* DirectX */
 #cmakedefine HAVE_DIRECTX
 #cmakedefine HAVE_DIRECTX_NV12
