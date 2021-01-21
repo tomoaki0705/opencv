@@ -240,6 +240,7 @@ NCVStatus scanRowsWrapperDevice(T_in *d_src, Ncv32u srcStride,
         <T_in, T_out, tbDoSqr>
         <<<roi.height, NUM_SCAN_THREADS, 0, nppStGetActiveCUDAstream()>>>
         (d_src, (Ncv32u)alignmentOffset, roi.width, srcStride, d_dst, dstStride);
+    cudaDeviceSynchronize();
 
     ncvAssertCUDALastErrorReturn(NPPST_CUDA_KERNEL_EXECUTION_ERROR);
 
@@ -299,6 +300,7 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedWidthII32*sizeof(Ncv32u),
                                       (Ncv32u *)Tmp32_2.ptr(), PaddedHeightII32*sizeof(Ncv32u), NcvSize32u(WidthII, roi.height));
+    cudaDeviceSynchronize();
     ncvAssertReturnNcvStat(ncvStat);
 
     ncvStat = scanRowsWrapperDevice
@@ -308,6 +310,7 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedHeightII32*sizeof(Ncv32u),
                                       (Ncv32u *)d_dst, dstStep*sizeof(Ncv32u), NcvSize32u(HeightII, WidthII));
+    cudaDeviceSynchronize();
     ncvAssertReturnNcvStat(ncvStat);
 
     NCV_SKIP_COND_END
