@@ -62,38 +62,38 @@
 /**
 @defgroup core Core functionality
 @{
-    @defgroup core_basic Basic structures
-    @defgroup core_c C structures and operations
+    @defgroup core_basic 基本構造体
+    @defgroup core_c C構造体と操作
     @{
-        @defgroup core_c_glue Connections with C++
+        @defgroup core_c_glue C++とのバインディング
     @}
-    @defgroup core_array Operations on arrays
-    @defgroup core_async Asynchronous API
-    @defgroup core_xml XML/YAML Persistence
-    @defgroup core_cluster Clustering
-    @defgroup core_utils Utility and system functions and macros
+    @defgroup core_array 配列操作
+    @defgroup core_async 非同期API
+    @defgroup core_xml XML/YAML 永続性
+    @defgroup core_cluster クラスタリング
+    @defgroup core_utils ユーティリティとシステム関数とマクロ
     @{
-        @defgroup core_logging Logging facilities
-        @defgroup core_utils_sse SSE utilities
-        @defgroup core_utils_neon NEON utilities
-        @defgroup core_utils_vsx VSX utilities
-        @defgroup core_utils_softfloat Softfloat support
-        @defgroup core_utils_samples Utility functions for OpenCV samples
+        @defgroup core_logging ロギング機能
+        @defgroup core_utils_sse SSE 用ユーティリティ
+        @defgroup core_utils_neon NEON 用ユーティリティ
+        @defgroup core_utils_vsx VSX 用ユーティリティ
+        @defgroup core_utils_softfloat Softfloat サポート
+        @defgroup core_utils_samples OpenCV サンプル用ユーティリティ関数
     @}
-    @defgroup core_opengl OpenGL interoperability
-    @defgroup core_ipp Intel IPP Asynchronous C/C++ Converters
-    @defgroup core_optim Optimization Algorithms
-    @defgroup core_directx DirectX interoperability
-    @defgroup core_eigen Eigen support
-    @defgroup core_opencl OpenCL support
-    @defgroup core_va_intel Intel VA-API/OpenCL (CL-VA) interoperability
+    @defgroup core_opengl OpenGL との相互運用性
+    @defgroup core_ipp Intel IPP 非同期 C/C++ 変換関数
+    @defgroup core_optim 最適化モジュール
+    @defgroup core_directx DirectX との相互運用性
+    @defgroup core_eigen Eigen サポート
+    @defgroup core_opencl OpenCL サポート
+    @defgroup core_va_intel Intel VA-API/OpenCL (CL-VA) 相互運用性
     @defgroup core_hal Hardware Acceleration Layer
     @{
-        @defgroup core_hal_functions Functions
-        @defgroup core_hal_interface Interface
-        @defgroup core_hal_intrin Universal intrinsics
+        @defgroup core_hal_functions 関数
+        @defgroup core_hal_interface インタフェース
+        @defgroup core_hal_intrin Universal 組み込み関数
         @{
-            @defgroup core_hal_intrin_impl Private implementation helpers
+            @defgroup core_hal_intrin_impl プライベートな実装ヘルパ
         @}
     @}
 @}
@@ -104,37 +104,36 @@ namespace cv {
 //! @addtogroup core_utils
 //! @{
 
-/*! @brief Class passed to an error.
+/*! @brief エラー時に渡されるクラス
 
-This class encapsulates all or almost all necessary
-information about the error happened in the program. The exception is
-usually constructed and thrown implicitly via CV_Error and CV_Error_ macros.
+本クラスは、エラー発生時に投げられる(ほぼ)全ての情報を格納する。
+例外エラーは、通常 CV_Error もしくは CV_Error_ マクロを通じて投げられる
 @see error
  */
 class CV_EXPORTS Exception : public std::exception
 {
 public:
     /*!
-     Default constructor
+     デフォルトコンストラクタ
      */
     Exception();
     /*!
-     Full constructor. Normally the constructor is not called explicitly.
-     Instead, the macros CV_Error(), CV_Error_() and CV_Assert() are used.
+     省略しないコンストラクタ。通常このコンストラクタは明示的に呼ばれることは無く、
+     代わりに CV_Error() 、 CV_Error_() および CV_Assert() マクロが使われる
     */
     Exception(int _code, const String& _err, const String& _func, const String& _file, int _line);
     virtual ~Exception() throw();
 
     /*!
-     \return the error description and the context as a text string.
+     \return エラーの詳細とコンテキストが文字列として返される
     */
     virtual const char *what() const throw() CV_OVERRIDE;
     void formatMessage();
 
-    String msg; ///< the formatted error message
+    String msg; ///< 整形されたエラーメッセージ
 
-    int code; ///< error code @see CVStatus
-    String err; ///< error description
+    int code; ///< エラーコード @see CVStatus
+    String err; ///< エラー解説
     String func; ///< function name. Available only when the compiler supports getting it
     String file; ///< source file name where the error has occurred
     int line; ///< line number in the source file where the error has occurred
