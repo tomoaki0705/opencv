@@ -604,7 +604,7 @@ static void minMaxIdx_32f(const float* src, const uchar* mask, float* minval, fl
                           size_t* minidx, size_t* maxidx, int len, size_t startidx )
 {
 #if CV_SIMD128
-    if ( len >= 2 * v_float32x4::nlanes )
+    if ( /*len >= 2 * v_float32x4::nlanes*/ false )
     {
         int j, len0;
         float minVal, maxVal;
