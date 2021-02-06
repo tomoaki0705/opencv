@@ -198,12 +198,12 @@ bool TestIntegralImage<T_in, T_out>::process()
     bool bLoopVirgin = true;
 
     NCV_SKIP_COND_BEGIN
-    if (sizeof(T_in) == sizeof(Ncv32f))
-    {
-        //bit-to-bit check
-        dump((float*)h_imgII.ptr(),   "cpuIntegral", (h_img.width()+1), (h_img.height()+1), h_imgII.stride());
-        dump((float*)h_imgII_d.ptr(), "dpuIntegral", (h_img.width()+1), (h_img.height()+1), h_imgII_d.stride());
-    }
+    //if (sizeof(T_in) == sizeof(Ncv32f))
+    //{
+    //    //bit-to-bit check
+    //    dump((float*)h_imgII.ptr(),   "cpuIntegral", (h_img.width()+1), (h_img.height()+1), h_imgII.stride());
+    //    dump((float*)h_imgII_d.ptr(), "dpuIntegral", (h_img.width()+1), (h_img.height()+1), h_imgII_d.stride());
+    //}
     for (Ncv32u i=0; bLoopVirgin && i < h_img.height() + 1; i++)
     {
         for (Ncv32u j=0; bLoopVirgin && j < h_img.width() + 1; j++)

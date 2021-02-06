@@ -48,12 +48,45 @@
 #include "opencv2/cudev.hpp"
 
 #include "opencv2/cudalegacy/NPP_staging.hpp"
+#include <fstream>
 
 
 texture<Ncv8u,  1, cudaReadModeElementType> tex8u;
 texture<Ncv32u, 1, cudaReadModeElementType> tex32u;
 texture<uint2,  1, cudaReadModeElementType> tex64u;
 
+int checkAvaiableFilename(const std::string& prefix)
+{
+    int result = 0;
+    for(result = 0;result < 1000;result++)
+    {
+        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
+        if(ofs.is_open() == false)
+        {
+           break;
+       }
+    }
+    return result;
+}
+
+template<typename T>
+void dump(const T* v, const std::string& prefix, int width, int height, int stride)
+{
+    int validNumber = checkAvaiableFilename(prefix);
+    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
+    T *array = new T[stride*height];
+    cudaMemcpy((void*)array, (void*)v, stride*height*sizeof(T), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    for(int y = 0;y < height;y++)
+    {
+    for(int x = 0;x < width ;x++)
+    {
+            ofs << array[y * stride + x] << ',' << '\t';
+    }
+    ofs << std::endl;
+    }
+    delete [] array;
+}
 
 //==============================================================================
 //
@@ -287,6 +320,7 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
     NCVMatrixAlloc<T_out> Tmp32_2(gpuAllocator, PaddedHeightII32, PaddedWidthII32);
     ncvAssertReturn(gpuAllocator.isCounting() || Tmp32_2.isMemAllocated(), NPPST_MEM_INTERNAL_ERROR);
     ncvAssertReturn(Tmp32_1.pitch() * Tmp32_1.height() == Tmp32_2.pitch() * Tmp32_2.height(), NPPST_MEM_INTERNAL_ERROR);
+    cudaDeviceSynchronize();
 
     NCVStatus ncvStat;
     NCV_SET_SKIP_COND(gpuAllocator.isCounting());
@@ -297,21 +331,26 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
         <false>
         (d_src, srcStep, Tmp32_1.ptr(), PaddedWidthII32, roi);
     ncvAssertReturnNcvStat(ncvStat);
+    cudaDeviceSynchronize();
+    dump((float*)Tmp32_1.ptr(), "gpuScanH", WidthII, HeightII, PaddedWidthII32);
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedWidthII32*sizeof(Ncv32u),
                                       (Ncv32u *)Tmp32_2.ptr(), PaddedHeightII32*sizeof(Ncv32u), NcvSize32u(WidthII, roi.height));
     cudaDeviceSynchronize();
     ncvAssertReturnNcvStat(ncvStat);
+    dump((float*)Tmp32_2.ptr(), "gpuTranH", HeightII, WidthII, PaddedHeightII32);
 
     ncvStat = scanRowsWrapperDevice
         <false>
         (Tmp32_2.ptr(), PaddedHeightII32, Tmp32_1.ptr(), PaddedHeightII32, NcvSize32u(roi.height, WidthII));
     ncvAssertReturnNcvStat(ncvStat);
+    dump((float*)Tmp32_1.ptr(), "gpuScanV", HeightII, WidthII, PaddedHeightII32);
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedHeightII32*sizeof(Ncv32u),
                                       (Ncv32u *)d_dst, dstStep*sizeof(Ncv32u), NcvSize32u(HeightII, WidthII));
     cudaDeviceSynchronize();
     ncvAssertReturnNcvStat(ncvStat);
+    dump((float*)Tmp32_2.ptr(), "gpuTranV", WidthII, HeightII, PaddedWidthII32);
 
     NCV_SKIP_COND_END
 
