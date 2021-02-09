@@ -198,18 +198,19 @@ __global__ void scanRows(T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u sr
                          T_out *d_II, Ncv32u IIstride)
 {
     //advance pointers to the current line
-    if (sizeof(T_in) != 1)
+    //if (sizeof(T_in) != 1)
     {
-        d_src += srcStride * blockIdx.x;
+        d_src += srcStride * blockDim.x * blockIdx.x;
     }
     //for initial image 8bit source we use texref tex8u
-    d_II += IIstride * blockIdx.x;
+    d_II += IIstride * blockDim.x * blockIdx.x;
 
-	T_out sum = 0;
+    T_out sum = 0;
     for(int x = 0;x < srcWidth;x++)
-	{
-			sum += d_src[x];
-			d_II[x+1] = sum;
+    {
+        sum += d_src[x];
+        d_II[x+1] = sum;
+        //d_II[x+1] = blockIdx.x;
     } 
 #if 0
     Ncv32u numBuckets = (srcWidth + NUM_SCAN_THREADS - 1) >> LOG2_NUM_SCAN_THREADS;
