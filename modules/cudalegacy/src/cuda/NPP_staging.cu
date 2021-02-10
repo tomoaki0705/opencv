@@ -42,6 +42,12 @@
 
 #if !defined CUDA_DISABLER
 #define WORKAROUND 1
+#define DUMP_RESULTS 0
+#if DUMP_RESULTS
+#define DUMP(a,b,c,d,e) dump(a,b,c,d,e)
+#else
+#define DUMP(a,b,c,d,e)
+#endif
 
 #include <vector>
 #include <cuda_runtime.h>
@@ -57,38 +63,40 @@ texture<Ncv8u,  1, cudaReadModeElementType> tex8u;
 texture<Ncv32u, 1, cudaReadModeElementType> tex32u;
 texture<uint2,  1, cudaReadModeElementType> tex64u;
 
-//int checkAvaiableFilename(const std::string& prefix)
-//{
-//    int result = 0;
-//    for(result = 0;result < 1000;result++)
-//    {
-//        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
-//        if(ofs.is_open() == false)
-//        {
-//           break;
-//       }
-//    }
-//    return result;
-//}
+#if DUMP_RESULTS
+int checkAvaiableFilename(const std::string& prefix)
+{
+    int result = 0;
+    for(result = 0;result < 1000;result++)
+    {
+        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
+        if(ofs.is_open() == false)
+        {
+           break;
+       }
+    }
+    return result;
+}
 
-//template<typename T>
-//void dump(const T* v, const std::string& prefix, int width, int height, int stride)
-//{
-//    int validNumber = checkAvaiableFilename(prefix);
-//    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
-//    T *array = new T[stride*height];
-//    cudaMemcpy((void*)array, (void*)v, stride*height*sizeof(T), cudaMemcpyDeviceToHost);
-//    cudaDeviceSynchronize();
-//    for(int y = 0;y < height;y++)
-//    {
-//    for(int x = 0;x < width ;x++)
-//    {
-//            ofs << array[y * stride + x] << ',' << '\t';
-//    }
-//    ofs << std::endl;
-//    }
-//    delete [] array;
-//}
+template<typename T>
+void dump(const T* v, const std::string& prefix, int width, int height, int stride)
+{
+    int validNumber = checkAvaiableFilename(prefix);
+    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
+    T *array = new T[stride*height];
+    cudaMemcpy((void*)array, (void*)v, stride*height*sizeof(T), cudaMemcpyDeviceToHost);
+    cudaDeviceSynchronize();
+    for(int y = 0;y < height;y++)
+    {
+    for(int x = 0;x < width ;x++)
+    {
+            ofs << array[y * stride + x] << ',' << '\t';
+    }
+    ofs << std::endl;
+    }
+    delete [] array;
+}
+#endif
 
 //==============================================================================
 //
@@ -200,19 +208,6 @@ template <class T_in, class T_out, bool tbDoSqr>
 __global__ void scanRows(T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u srcStride,
                          T_out *d_II, Ncv32u IIstride)
 {
-#if (WORKAROUND == 1)
-    d_src += srcStride * blockIdx.x;
-    d_II  += IIstride  * blockIdx.x;
-
-    d_II[0] = 0;
-    T_out sum = 0;
-    for(int x = 0;x < srcWidth;x++)
-    {
-        T_out v = d_src[x];
-        sum += tbDoSqr ? v * v : v;
-        d_II[x+1] = sum;
-    }
-#else
     //advance pointers to the current line
     if (sizeof(T_in) != 1)
     {
@@ -230,6 +225,15 @@ __global__ void scanRows(T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u sr
     carryElem = 0;
     __syncthreads();
 
+#if (WORKAROUND == 1)
+    T_out sum = 0;
+    for(int x = 0;x < srcWidth;x++)
+    {
+        T_out v = d_src[x];
+        sum += tbDoSqr ? v * v : v;
+        d_II[x+1] = sum;
+    }
+#else
     while (numBuckets--)
     {
         Ncv32u curElemOffs = offsetX + threadIdx.x;
@@ -310,26 +314,6 @@ static Ncv32u getPaddedDimension(Ncv32u dim, Ncv32u elemTypeSize, Ncv32u allocat
 }
 
 template <class T_in, class T_out>
-void showMemrange(T_in *d_src, Ncv32u srcStride, T_out *d_dst, Ncv32u dstStride, NcvSize32u roi)
-{
-    std::ofstream dumpOutput("memRange.txt", std::ios_base::app);
-    intptr_t srcEnd = intptr_t(d_src + (srcStride) * roi.height);
-    intptr_t dstEnd = intptr_t(d_dst + (dstStride) * roi.height);
-    dumpOutput << "src:0x"  << std::hex
-               << std::setw(16) << std::setfill('0')
-               << intptr_t(d_src);
-    dumpOutput << "-0x"     << std::hex
-               << std::setw(16) << std::setfill('0')
-               << intptr_t(srcEnd);
-    dumpOutput << " dst:0x" << std::hex
-               << std::setw(16) << std::setfill('0')
-               << intptr_t(d_dst);
-    dumpOutput << "-0x"     << std::hex
-               << std::setw(16) << std::setfill('0')
-               << intptr_t(dstEnd) << std::endl;
-}
-
-template <class T_in, class T_out>
 NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
                                   T_out *d_dst, Ncv32u dstStep, NcvSize32u roi,
                                   INCVMemAllocator &gpuAllocator)
@@ -362,29 +346,29 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
     NCV_SET_SKIP_COND(gpuAllocator.isCounting());
 
     NCV_SKIP_COND_BEGIN
-    //dump((T_out*)d_src, "gpuSrcDD", roi.width, roi.height, PaddedWidthII32);
+    DUMP((T_out*)d_src, "gpuSrcDD", roi.width, roi.height, PaddedWidthII32);
 
     ncvStat = scanRowsWrapperDevice
         <false>
         (d_src, srcStep, Tmp32_1.ptr(), PaddedWidthII32, roi);
     ncvAssertReturnNcvStat(ncvStat);
-    //dump((T_out*)Tmp32_1.ptr(), "gpuScanH", WidthII, HeightII, PaddedWidthII32);
+    DUMP((T_out*)Tmp32_1.ptr(), "gpuScanH", WidthII, HeightII, PaddedWidthII32);
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedWidthII32*sizeof(Ncv32u),
                                       (Ncv32u *)Tmp32_2.ptr(), PaddedHeightII32*sizeof(Ncv32u), NcvSize32u(WidthII, roi.height));
     ncvAssertReturnNcvStat(ncvStat);
-    //dump((T_out*)Tmp32_2.ptr(), "gpuTranH", HeightII, WidthII, PaddedHeightII32);
+    DUMP((T_out*)Tmp32_2.ptr(), "gpuTranH", HeightII, WidthII, PaddedHeightII32);
 
     ncvStat = scanRowsWrapperDevice
         <false>
         (Tmp32_2.ptr(), PaddedHeightII32, Tmp32_1.ptr(), PaddedHeightII32, NcvSize32u(roi.height, WidthII));
     ncvAssertReturnNcvStat(ncvStat);
-    //dump((T_out*)Tmp32_1.ptr(), "gpuScanV", HeightII, WidthII, PaddedHeightII32);
+    DUMP((T_out*)Tmp32_1.ptr(), "gpuScanV", HeightII, WidthII, PaddedHeightII32);
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedHeightII32*sizeof(Ncv32u),
                                       (Ncv32u *)d_dst, dstStep*sizeof(Ncv32u), NcvSize32u(HeightII, WidthII));
     ncvAssertReturnNcvStat(ncvStat);
-    //dump((T_out*)d_dst, "gpuTranV", WidthII, HeightII, PaddedWidthII32);
+    DUMP((T_out*)d_dst, "gpuTranV", WidthII, HeightII, PaddedWidthII32);
 
     NCV_SKIP_COND_END
 
