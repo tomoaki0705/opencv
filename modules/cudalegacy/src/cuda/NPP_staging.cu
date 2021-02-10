@@ -57,38 +57,38 @@ texture<Ncv8u,  1, cudaReadModeElementType> tex8u;
 texture<Ncv32u, 1, cudaReadModeElementType> tex32u;
 texture<uint2,  1, cudaReadModeElementType> tex64u;
 
-int checkAvaiableFilename(const std::string& prefix)
-{
-    int result = 0;
-    for(result = 0;result < 1000;result++)
-    {
-        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
-        if(ofs.is_open() == false)
-        {
-           break;
-       }
-    }
-    return result;
-}
+//int checkAvaiableFilename(const std::string& prefix)
+//{
+//    int result = 0;
+//    for(result = 0;result < 1000;result++)
+//    {
+//        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
+//        if(ofs.is_open() == false)
+//        {
+//           break;
+//       }
+//    }
+//    return result;
+//}
 
-template<typename T>
-void dump(const T* v, const std::string& prefix, int width, int height, int stride)
-{
-    int validNumber = checkAvaiableFilename(prefix);
-    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
-    T *array = new T[stride*height];
-    cudaMemcpy((void*)array, (void*)v, stride*height*sizeof(T), cudaMemcpyDeviceToHost);
-    cudaDeviceSynchronize();
-    for(int y = 0;y < height;y++)
-    {
-    for(int x = 0;x < width ;x++)
-    {
-            ofs << array[y * stride + x] << ',' << '\t';
-    }
-    ofs << std::endl;
-    }
-    delete [] array;
-}
+//template<typename T>
+//void dump(const T* v, const std::string& prefix, int width, int height, int stride)
+//{
+//    int validNumber = checkAvaiableFilename(prefix);
+//    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
+//    T *array = new T[stride*height];
+//    cudaMemcpy((void*)array, (void*)v, stride*height*sizeof(T), cudaMemcpyDeviceToHost);
+//    cudaDeviceSynchronize();
+//    for(int y = 0;y < height;y++)
+//    {
+//    for(int x = 0;x < width ;x++)
+//    {
+//            ofs << array[y * stride + x] << ',' << '\t';
+//    }
+//    ofs << std::endl;
+//    }
+//    delete [] array;
+//}
 
 //==============================================================================
 //
@@ -122,8 +122,8 @@ cudaStream_t nppStSetActiveCUDAstream(cudaStream_t cudaStream)
 //==============================================================================
 
 
-#if WORKAROUND != 1
 const Ncv32u NUM_SCAN_THREADS = 256;
+#if WORKAROUND != 1
 const Ncv32u LOG2_NUM_SCAN_THREADS = 8;
 #endif
 
