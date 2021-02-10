@@ -41,6 +41,7 @@
 //M*/
 
 #if !defined CUDA_DISABLER
+#define WORKAROUND 1
 
 #include <vector>
 #include <cuda_runtime.h>
@@ -121,8 +122,10 @@ cudaStream_t nppStSetActiveCUDAstream(cudaStream_t cudaStream)
 //==============================================================================
 
 
+#if WORKAROUND != 1
 const Ncv32u NUM_SCAN_THREADS = 256;
 const Ncv32u LOG2_NUM_SCAN_THREADS = 8;
+#endif
 
 
 template<class T_in, class T_out>
@@ -197,7 +200,7 @@ template <class T_in, class T_out, bool tbDoSqr>
 __global__ void scanRows(T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u srcStride,
                          T_out *d_II, Ncv32u IIstride)
 {
-    //advance pointers to the current line
+#if (WORKAROUND == 1)
     d_src += srcStride * blockIdx.x;
     d_II  += IIstride  * blockIdx.x;
 
@@ -208,8 +211,17 @@ __global__ void scanRows(T_in *d_src, Ncv32u texOffs, Ncv32u srcWidth, Ncv32u sr
         T_out v = d_src[x];
         sum += tbDoSqr ? v * v : v;
         d_II[x+1] = sum;
-    } 
-#if 0
+    }
+#else
+    //advance pointers to the current line
+    if (sizeof(T_in) != 1)
+    {
+        d_src += srcStride * blockIdx.x;
+    }
+    //for initial image 8bit source we use texref tex8u
+    d_II += IIstride * blockIdx.x;
+    d_II[0] = 0;
+
     Ncv32u numBuckets = (srcWidth + NUM_SCAN_THREADS - 1) >> LOG2_NUM_SCAN_THREADS;
     Ncv32u offsetX = 0;
 
@@ -280,7 +292,6 @@ NCVStatus scanRowsWrapperDevice(T_in *d_src, Ncv32u srcStride,
         <T_in, T_out, tbDoSqr>
         <<<roi.height, NUM_SCAN_THREADS, 0, nppStGetActiveCUDAstream()>>>
         (d_src, (Ncv32u)alignmentOffset, roi.width, srcStride, d_dst, dstStride);
-    cudaDeviceSynchronize();
 
     ncvAssertCUDALastErrorReturn(NPPST_CUDA_KERNEL_EXECUTION_ERROR);
 
@@ -298,7 +309,7 @@ static Ncv32u getPaddedDimension(Ncv32u dim, Ncv32u elemTypeSize, Ncv32u allocat
     return PaddedDim;
 }
 
-template <class T_in, class T_out>  
+template <class T_in, class T_out>
 void showMemrange(T_in *d_src, Ncv32u srcStride, T_out *d_dst, Ncv32u dstStride, NcvSize32u roi)
 {
     std::ofstream dumpOutput("memRange.txt", std::ios_base::app);
