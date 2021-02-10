@@ -41,7 +41,6 @@
 //M*/
 
 #include "test_precomp.hpp"
-#include <fstream>
 
 
 template <class T_in, class T_out>
@@ -73,34 +72,6 @@ bool TestIntegralImage<T_in, T_out>::init()
     return true;
 }
 
-int checkAvaiableFilename(const std::string& prefix)
-{
-    int result = 0;
-    for(result = 0;result < 100;result++)
-    {
-        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
-        if(ofs.is_open() == false)
-        {
-           break;
-       }
-    }
-    return result;
-}
-
-template<typename T>
-void dump(const T* v, const std::string& prefix, int width, int height, int stride)
-{
-    int validNumber = checkAvaiableFilename(prefix);
-    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
-    for(int y = 0;y < height;y++)
-    {
-    for(int x = 0;x < width ;x++)
-    {
-            ofs << v[y * stride + x] << ',' << '\t';
-    }
-    ofs << std::endl;
-    }
-}
 
 template <class T_in, class T_out>
 bool TestIntegralImage<T_in, T_out>::process()
