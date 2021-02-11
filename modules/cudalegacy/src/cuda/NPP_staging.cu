@@ -41,7 +41,7 @@
 //M*/
 
 #if !defined CUDA_DISABLER
-#define WORKAROUND 1
+#define WORKAROUND 0
 #define DUMP_RESULTS 0
 #if DUMP_RESULTS
 #define DUMP(a,b,c,d,e) dump(a,b,c,d,e)
@@ -131,9 +131,7 @@ cudaStream_t nppStSetActiveCUDAstream(cudaStream_t cudaStream)
 
 
 const Ncv32u NUM_SCAN_THREADS = 256;
-#if WORKAROUND != 1
 const Ncv32u LOG2_NUM_SCAN_THREADS = 8;
-#endif
 
 
 template<class T_in, class T_out>
