@@ -55,20 +55,20 @@ void generateIntegralTests(NCVAutoTestLister &testLister,
                            NCVTestSourceProvider<T_in> &src,
                            Ncv32u maxWidth, Ncv32u maxHeight)
 {
-    //for (Ncv32f _i=1.0; _i<maxWidth; _i*=1.2f)
-    //{
-    //    Ncv32u i = (Ncv32u)_i;
-    //    char testName[80];
-    //    sprintf(testName, "LinIntImgW%dH%d", i, 2);
-    //    testLister.add(new TestIntegralImage<T_in, T_out>(testName, src, i, 2));
-    //}
-    //for (Ncv32f _i=1.0; _i<maxHeight; _i*=1.2f)
-    //{
-    //    Ncv32u i = (Ncv32u)_i;
-    //    char testName[80];
-    //    sprintf(testName, "LinIntImgW%dH%d", 2, i);
-    //    testLister.add(new TestIntegralImage<T_in, T_out>(testName, src, 2, i));
-    //}
+    for (Ncv32f _i=1.0; _i<maxWidth; _i*=1.2f)
+    {
+        Ncv32u i = (Ncv32u)_i;
+        char testName[80];
+        sprintf(testName, "LinIntImgW%dH%d", i, 2);
+        testLister.add(new TestIntegralImage<T_in, T_out>(testName, src, i, 2));
+    }
+    for (Ncv32f _i=1.0; _i<maxHeight; _i*=1.2f)
+    {
+        Ncv32u i = (Ncv32u)_i;
+        char testName[80];
+        sprintf(testName, "LinIntImgW%dH%d", 2, i);
+        testLister.add(new TestIntegralImage<T_in, T_out>(testName, src, 2, i));
+    }
 
     testLister.add(new TestIntegralImage<T_in, T_out>("LinIntImg_VGA", src, 640, 480));
 }
@@ -307,8 +307,8 @@ bool nvidia_NPPST_Integral_Image(const std::string& test_data_path, OutputLevel 
     NCVTestSourceProvider<Ncv8u> testSrcRandom_8u(2010, 0, 255, 2048, 2048);
     NCVTestSourceProvider<Ncv32f> testSrcRandom_32f(2010, -1.0f, 1.0f, 2048, 2048);
 
-    generateIntegralTests<Ncv8u, Ncv32u>(testListerII, testSrcRandom_8u, 2048, 2048);
-    generateIntegralTests<Ncv32f, Ncv32f>(testListerII, testSrcRandom_32f, 2048, 2048);
+    generateIntegralTests<Ncv8u, Ncv32u>(testListerII, testSrcRandom_8u, 40, 40);
+    generateIntegralTests<Ncv32f, Ncv32f>(testListerII, testSrcRandom_32f, 40, 40);
 
     return testListerII.invoke();
 }
