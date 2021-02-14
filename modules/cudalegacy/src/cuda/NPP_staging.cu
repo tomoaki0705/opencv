@@ -58,6 +58,8 @@
 #include <fstream>
 #include <iomanip>
 #include <stdlib.h>
+#include <string>
+#include <sstream>
 
 texture<Ncv8u,  1, cudaReadModeElementType> tex8u;
 texture<Ncv32u, 1, cudaReadModeElementType> tex32u;
@@ -69,7 +71,10 @@ int checkAvaiableFilename(const std::string& prefix)
     int result = 0;
     for(result = 0;result < 1000;result++)
     {
-        std::ifstream ofs(prefix + std::to_string(result) + std::string(".csv"));
+        std::stringstream ss;
+        ss << std::setw(3) << std::setfill('0') << result;
+        std::string filename = prefix + ss.str() + std::string(".csv");
+        std::ifstream ofs(filename.c_str());
         if(ofs.is_open() == false)
         {
            break;
@@ -82,7 +87,10 @@ template<typename T>
 void dump(const T* v, const std::string& prefix, int width, int height, int stride)
 {
     int validNumber = checkAvaiableFilename(prefix);
-    std::ofstream ofs(prefix + std::to_string(validNumber) + std::string(".csv"));
+    std::stringstream ss;
+    ss << std::setw(3) << std::setfill('0') << validNumber;
+    std::string filename = prefix + ss.str() + std::string(".csv");
+    std::ofstream ofs(filename.c_str());
     T *array = new T[stride*height];
     cudaMemcpy((void*)array, (void*)v, stride*height*sizeof(T), cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
@@ -361,6 +369,7 @@ NCVStatus ncvIntegralImage_device(T_in *d_src, Ncv32u srcStep,
         <false>
         (Tmp32_2.ptr(), PaddedHeightII32, Tmp32_1.ptr(), PaddedHeightII32, NcvSize32u(roi.height, WidthII));
     ncvAssertReturnNcvStat(ncvStat);
+    cudaDeviceSynchronize();
     DUMP((T_out*)Tmp32_1.ptr(), "gpuScanV", HeightII, WidthII, PaddedHeightII32);
 
     ncvStat = nppiStTranspose_32u_C1R((Ncv32u *)Tmp32_1.ptr(), PaddedHeightII32*sizeof(Ncv32u),
