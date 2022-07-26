@@ -79,9 +79,9 @@
 #define CV_OPENCL_SHOW_BUILD_OPTIONS             0
 #define CV_OPENCL_SHOW_BUILD_KERNELS             0
 
-#define CV_OPENCL_SHOW_RUN_KERNELS               0
+#define CV_OPENCL_SHOW_RUN_KERNELS               1
 #define CV_OPENCL_SYNC_RUN_KERNELS               0
-#define CV_OPENCL_TRACE_CHECK                    0
+#define CV_OPENCL_TRACE_CHECK                    1
 
 #define CV_OPENCL_VALIDATE_BINARY_PROGRAMS       1
 
