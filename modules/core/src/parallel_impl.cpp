@@ -18,7 +18,7 @@
 
 #include <opencv2/core/utils/trace.private.hpp>
 
-//#define CV_PROFILE_THREADS 64
+#define CV_PROFILE_THREADS 64
 //#define getTickCount getCPUTickCount  // use this if getTickCount() calls are expensive (and getCPUTickCount() is accurate)
 
 //#define CV_USE_GLOBAL_WORKERS_COND_VAR  // not effective on many-core systems (10+)
